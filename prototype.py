@@ -76,13 +76,47 @@ vectorizer, model = load_and_train()
 def scrape_kelantan_recent(limit=50, hours=24):
     """
     Fetch tweets from the last X hours (near real-time).
+    Falls back to broader search if time-filtered search fails.
     """
+    # Try with time filter first
     since_time = (datetime.utcnow() - timedelta(hours=hours)).strftime('%Y-%m-%d')
-    query = f"Kelantan OR orang kelantan since:{since_time}"
+    query_time = f"Kelantan OR orang kelantan since:{since_time}"
+    
+    # Fallback query without time filter
+    query_broad = "Kelantan OR orang kelantan"
 
+    # Try time-filtered search first
     try:
         result = scraper.get_tweets(
-            query,
+            query_time,
+            mode="term",
+            number=limit,
+            language="ms"
+        )
+        
+        # If we got results, use them
+        if result and result.get("tweets"):
+            tweets = []
+            for t in result.get("tweets", []):
+                tweets.append({
+                    "date": t.get("date"),
+                    "tweet": t.get("text")
+                })
+            
+            df = pd.DataFrame(tweets)
+            if not df.empty:
+                df["date"] = pd.to_datetime(
+                    df["date"].str.replace("·", "", regex=False),
+                    errors="coerce"
+                )
+                return df
+    except Exception:
+        pass
+    
+    # Fallback: try broader search without time filter
+    try:
+        result = scraper.get_tweets(
+            query_broad,
             mode="term",
             number=limit,
             language="ms"
@@ -131,7 +165,8 @@ if st.sidebar.button("🔄 Refresh Analysis"):
         df_tweets = scrape_kelantan_recent(tweet_limit, hours)
 
     if df_tweets.empty:
-        st.warning("No recent tweets available. Showing last cached data.")
+        st.error("⚠️ Unable to fetch tweets at this moment.")
+        st.info("Please try again in a few moments or check your internet connection.")
         st.stop()
 
     # Sentiment Prediction
