@@ -5,7 +5,7 @@ from datasets import load_dataset
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 import plotly.express as px
-from transformers import pipeline
+from textblob import TextBlob
 
 # =====================================
 # PAGE CONFIG
@@ -53,8 +53,16 @@ def load_data():
     dataset = load_dataset("malaysia-ai/malaysian-twitter-by-topics")
     df = dataset["train"].to_pandas()
 
-    # Rename columns for consistency
-    df = df.rename(columns={"text": "tweet", "label": "topic"})
+    # Inspect columns
+    st.write("Dataset columns:", df.columns.tolist())
+
+    # Rename for consistency
+    if "text" in df.columns and "label" in df.columns:
+        df = df.rename(columns={"text": "tweet", "label": "topic"})
+    else:
+        st.error("Expected 'text' and 'label' columns not found in dataset")
+        st.stop()
+
     df["clean_tweet"] = df["tweet"].apply(clean_text)
     return df
 
@@ -73,16 +81,20 @@ def train_model(df):
     return vectorizer, model
 
 # =====================================
-# SENTIMENT PIPELINE
+# SIMPLE SENTIMENT FUNCTION (TextBlob)
 # =====================================
-@st.cache_resource
-def load_sentiment_model():
-    return pipeline("sentiment-analysis")
+def get_sentiment(text):
+    analysis = TextBlob(text)
+    if analysis.sentiment.polarity > 0:
+        return "Positive"
+    elif analysis.sentiment.polarity < 0:
+        return "Negative"
+    else:
+        return "Neutral"
 
-with st.spinner("Loading dataset & training models..."):
+with st.spinner("Loading dataset & training model..."):
     df_all = load_data()
     vectorizer, topic_model = train_model(df_all)
-    sentiment_model = load_sentiment_model()
 
 # =====================================
 # SIDEBAR
@@ -109,20 +121,18 @@ if st.sidebar.button("Run Analysis"):
     )
 
     # Sentiment scoring
-    sentiments = sentiment_model(df_kelantan["clean_tweet"].tolist())
-    df_kelantan["sentiment_label"] = [s["label"] for s in sentiments]
-    df_kelantan["sentiment_score"] = [s["score"] for s in sentiments]
+    df_kelantan["sentiment_label"] = df_kelantan["clean_tweet"].apply(get_sentiment)
 
     # METRICS
     c1, c2, c3 = st.columns(3)
     c1.metric("Total Tweets", len(df_kelantan))
-    c2.metric("Positive (%)", f"{(df_kelantan['sentiment_label']=='POSITIVE').mean()*100:.1f}")
-    c3.metric("Negative (%)", f"{(df_kelantan['sentiment_label']=='NEGATIVE').mean()*100:.1f}")
+    c2.metric("Positive (%)", f"{(df_kelantan['sentiment_label']=='Positive').mean()*100:.1f}")
+    c3.metric("Negative (%)", f"{(df_kelantan['sentiment_label']=='Negative').mean()*100:.1f}")
 
     # TABLE
     st.subheader("📋 Kelantan Tweets")
     st.dataframe(
-        df_kelantan[["tweet", "topic_prediction", "sentiment_label", "sentiment_score"]],
+        df_kelantan[["tweet", "topic_prediction", "sentiment_label"]],
         use_container_width=True
     )
 
@@ -139,7 +149,7 @@ else:
 **Kelantan Social Unity Sentiment Analysis**
 
 • Dataset: Malaysian Twitter by Topics  
-• Models: TF-IDF + Naive Bayes (topics) + Hugging Face Sentiment Pipeline  
+• Models: TF-IDF + Naive Bayes (topics) + TextBlob (sentiment)  
 • Filtering: Keyword-based Kelantan detection  
 • Purpose: Analyse both **topics** and **sentiment** in Kelantan-related tweets
 """)
