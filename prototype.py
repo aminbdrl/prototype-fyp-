@@ -2,17 +2,15 @@ import streamlit as st
 import pandas as pd
 import re
 from ntscraper import Nitter # Replacement for broken snscrape
-import datetime
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 import plotly.express as px
 
 # ----------------------------
-# 1. Scraper Initialization
+# 1. Scraper Setup
 # ----------------------------
 @st.cache_resource
 def get_nitter_scraper():
-    # Nitter allows scraping without an official Twitter API key
     return Nitter(log_level=1)
 
 scraper = get_nitter_scraper()
@@ -22,20 +20,19 @@ scraper = get_nitter_scraper()
 # ----------------------------
 st.set_page_config(page_title="Kelantan Social Sentiment Dashboard", layout="wide")
 st.title("📊 Real‑Time Sentiment Analysis Dashboard — Kelantan")
-st.write("Live sentiment trends using the Nitter scraper and your custom training dataset.")
 
 # ----------------------------
-# 3. Model Training (Updated for prototaip.csv)
+# 3. Model Training (FIXED: Handling NaNs)
 # ----------------------------
 @st.cache_data
 def load_and_train():
     try:
-        # Load the uploaded dataset
+        # Load your dataset
         df_train = pd.read_csv("prototaip.csv")
         
-        # DEFINED COLUMNS FROM YOUR DATASET:
-        # text_col = "comment/tweet" 
-        # label_col = "majority_sent"
+        # FIX: The error occurs because 'majority_sent' has 162 empty rows.
+        # We must drop rows where the text or label is missing.
+        df_train = df_train.dropna(subset=['comment/tweet', 'majority_sent'])
         
         def clean_text(text):
             if not isinstance(text, str): return ""
@@ -44,79 +41,71 @@ def load_and_train():
             text = re.sub(r"[^a-z\s']", "", text)
             return text.strip()
 
-        # Preprocess using the correct columns from your CSV
+        # Preprocess text
         df_train["clean_text"] = df_train["comment/tweet"].apply(clean_text)
         
+        # Training
         vectorizer = TfidfVectorizer(max_features=5000, ngram_range=(1,2))
         X_train = vectorizer.fit_transform(df_train["clean_text"])
         y_train = df_train["majority_sent"]
 
         model = MultinomialNB()
-        model.fit(X_train, y_train)
+        model.fit(X_train, y_train) # This will no longer crash
         return vectorizer, model, clean_text
     except FileNotFoundError:
-        st.error("Error: 'prototaip.csv' not found in the directory.")
-        st.stop()
-    except KeyError as e:
-        st.error(f"Mapping Error: Could not find column {e} in your CSV.")
+        st.error("File 'prototaip.csv' not found. Ensure it is in the same folder as this script.")
         st.stop()
 
 vectorizer, model, clean_text = load_and_train()
 
 # ----------------------------
-# 4. Twitter Scrape Function (Nitter)
+# 4. Live Scrape Function
 # ----------------------------
 def scrape_kelantan_tweets(limit):
-    # Using 'kelantan' as the search term
     query = "Kelantan OR 'orang kelantan'"
+    # Fetching live data via Nitter (free alternative to Twitter API)
     scraped_data = scraper.get_tweets(query, mode='term', number=limit, language='ms')
     
     tweets_list = []
     for t in scraped_data['tweets']:
-        tweets_list.append({
-            "date": t['date'],
-            "tweet": t['text']
-        })
+        tweets_list.append({"date": t['date'], "tweet": t['text']})
     
     df = pd.DataFrame(tweets_list)
     if not df.empty:
-        # Normalize Nitter's date format for plotting
         df['date'] = pd.to_datetime(df['date'].str.replace('·', '').strip(), errors='coerce')
     return df
 
 # ----------------------------
-# 5. User Interface & Analysis
+# 5. Dashboard Logic
 # ----------------------------
-tweet_limit = st.sidebar.slider("Number of Live Tweets to Fetch", 10, 100, 30)
+tweet_limit = st.sidebar.slider("Number of Live Tweets", 10, 100, 30)
 
 if st.button("Refresh Sentiment Now"):
-    with st.spinner("Fetching live data from X/Twitter..."):
+    with st.spinner("Fetching live data..."):
         df_tweets = scrape_kelantan_tweets(tweet_limit)
 
     if not df_tweets.empty:
-        # Analyze Scraped Data
+        # Prediction
         df_tweets["clean_text"] = df_tweets["tweet"].apply(clean_text)
         df_tweets["sentiment"] = model.predict(vectorizer.transform(df_tweets["clean_text"]))
         
-        # Layout Results
+        # Results Display
         col1, col2 = st.columns([2, 1])
-        
         with col1:
-            st.subheader("📋 Scraped Tweets & Predictions")
+            st.subheader("📋 Live Analysis Results")
             st.dataframe(df_tweets[["date", "tweet", "sentiment"]], use_container_width=True)
         
         with col2:
-            st.subheader("📊 Sentiment Breakdown")
-            fig_pie = px.pie(df_tweets, names="sentiment", hole=0.4, color="sentiment",
-                             color_discrete_map={'positive':'green', 'negative':'red', 'neutral':'gray'})
+            st.subheader("📊 Sentiment Distribution")
+            fig_pie = px.pie(df_tweets, names="sentiment", hole=0.4, 
+                             color_discrete_sequence=px.colors.qualitative.Safe)
             st.plotly_chart(fig_pie, use_container_width=True)
 
-        # Time Trend Analysis
-        st.subheader("📈 Sentiment Over Time")
+        # Timeline
+        st.subheader("📈 Trend Over Time")
         df_tweets['hour'] = df_tweets['date'].dt.floor('h')
         trend = df_tweets.groupby(['hour', 'sentiment']).size().reset_index(name='count')
-        fig_trend = px.line(trend, x='hour', y='count', color='sentiment', markers=True, title="Hourly Sentiment Volume")
+        fig_trend = px.line(trend, x='hour', y='count', color='sentiment', markers=True)
         st.plotly_chart(fig_trend, use_container_width=True)
-        
     else:
-        st.warning("The scraper returned no results. This can happen if Nitter instances are busy. Please try again in a moment.")
+        st.warning("No live tweets found. Try a different limit or wait a moment.")
