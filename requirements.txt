@@ -1,6 +1,5 @@
 streamlit
-ntscraper
 pandas
 scikit-learn
 plotly
-matplotlib
+snscrape
