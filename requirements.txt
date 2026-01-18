@@ -1,6 +1,6 @@
 streamlit
+datasets
 pandas
 numpy
 scikit-learn
 plotly
-pyarrow
