@@ -29,7 +29,7 @@ st.write("Live sentiment trends from Malay tweets mentioning Kelantan and relate
 @st.cache_data
 def load_public_dataset():
     # Load your merged sentiment Csv
-    return pd.read_csv("malay_twitter_sentiment.csv")
+    return pd.read_csv("prototaip.csv")
 
 df_train = load_public_dataset()
 
