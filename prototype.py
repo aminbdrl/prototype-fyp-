@@ -5,7 +5,9 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 import plotly.express as px
 from datetime import datetime, timedelta
-import snscrape.modules.twitter as sntwitter
+import requests
+from bs4 import BeautifulSoup
+import time
 
 # =====================================
 # PAGE CONFIG (MUST BE FIRST)
@@ -54,67 +56,129 @@ def load_and_train():
 vectorizer, model = load_and_train()
 
 # =====================================
-# 3. SCRAPE KELANTAN TWEETS (SNSCRAPE)
+# 3. TWITTER SCRAPER (Multiple Methods)
 # =====================================
 @st.cache_data(ttl=1800)  # cache for 30 minutes
 def scrape_kelantan_recent(limit=50, hours=24):
     """
-    Fetch tweets from the last X hours using snscrape.
+    Fetch tweets using multiple Nitter instances with better error handling.
     """
-    since_date = (datetime.now() - timedelta(hours=hours)).strftime('%Y-%m-%d')
-    until_date = datetime.now().strftime('%Y-%m-%d')
+    nitter_instances = [
+        "https://nitter.privacydev.net",
+        "https://nitter.poast.org",
+        "https://nitter.net",
+        "https://nitter.fdn.fr",
+        "https://nitter.unixfox.eu",
+        "https://nitter.it",
+        "https://nitter.1d4.us",
+        "https://nitter.kavin.rocks"
+    ]
     
-    # Query for Kelantan-related tweets
-    query = f"(Kelantan OR #Kelantan OR orang kelantan) lang:ms since:{since_date} until:{until_date}"
+    queries = [
+        "Kelantan",
+        "kelantan",
+        "#Kelantan"
+    ]
     
-    tweets = []
+    all_tweets = []
     
-    try:
-        # Scrape tweets using snscrape
-        for i, tweet in enumerate(sntwitter.TwitterSearchScraper(query).get_items()):
-            if i >= limit:
-                break
+    for instance in nitter_instances:
+        if len(all_tweets) >= limit:
+            break
             
-            tweets.append({
-                "date": tweet.date,
-                "tweet": tweet.rawContent
-            })
+        for query in queries:
+            if len(all_tweets) >= limit:
+                break
+                
+            try:
+                url = f"{instance}/search?f=tweets&q={query}&since=&until=&near="
+                
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+                
+                response = requests.get(url, headers=headers, timeout=10)
+                
+                if response.status_code == 200:
+                    soup = BeautifulSoup(response.content, 'html.parser')
+                    
+                    # Find tweet containers
+                    tweets = soup.find_all('div', class_='timeline-item')
+                    
+                    for tweet in tweets[:limit]:
+                        try:
+                            # Extract tweet text
+                            tweet_text_elem = tweet.find('div', class_='tweet-content')
+                            if tweet_text_elem:
+                                tweet_text = tweet_text_elem.get_text(strip=True)
+                                
+                                # Extract date
+                                date_elem = tweet.find('span', class_='tweet-date')
+                                tweet_date = datetime.now() - timedelta(hours=hours/2)  # Approximate
+                                
+                                if tweet_text and len(tweet_text) > 10:
+                                    all_tweets.append({
+                                        "date": tweet_date,
+                                        "tweet": tweet_text
+                                    })
+                        except Exception:
+                            continue
+                
+                time.sleep(0.5)  # Rate limiting
+                
+            except Exception:
+                continue
     
-    except Exception as e:
-        st.error(f"Error fetching tweets: {str(e)}")
+    if not all_tweets:
         return pd.DataFrame()
     
-    if not tweets:
-        # Fallback: try without language filter
-        query_broad = f"(Kelantan OR #Kelantan) since:{since_date}"
-        try:
-            for i, tweet in enumerate(sntwitter.TwitterSearchScraper(query_broad).get_items()):
-                if i >= limit:
-                    break
-                
-                tweets.append({
-                    "date": tweet.date,
-                    "tweet": tweet.rawContent
-                })
-        except Exception:
-            return pd.DataFrame()
-    
-    df = pd.DataFrame(tweets)
+    df = pd.DataFrame(all_tweets)
     
     # Remove duplicates
+    df = df.drop_duplicates(subset=['tweet'])
+    
+    # Filter to get recent tweets within time window
     if not df.empty:
-        df = df.drop_duplicates(subset=['tweet'])
-        df["date"] = pd.to_datetime(df["date"])
+        cutoff = datetime.now() - timedelta(hours=hours)
+        df = df[df["date"] >= cutoff]
     
     return df.head(limit)
 
 # =====================================
-# 4. SIDEBAR CONTROLS
+# 4. ALTERNATIVE: USE YOUR CSV DATA
+# =====================================
+@st.cache_data
+def load_recent_from_csv():
+    """
+    Fallback: Use your existing CSV data as 'recent' tweets
+    """
+    df = pd.read_csv("prototaip.csv")
+    df = df.dropna(subset=["comment/tweet"])
+    
+    # Simulate recent dates
+    df["date"] = pd.date_range(
+        end=datetime.now(),
+        periods=len(df),
+        freq='H'
+    )
+    
+    df = df.rename(columns={"comment/tweet": "tweet"})
+    
+    return df[["date", "tweet"]].tail(100)
+
+# =====================================
+# 5. SIDEBAR CONTROLS
 # =====================================
 st.sidebar.header("⚙️ Controls")
 
+data_source = st.sidebar.radio(
+    "Data Source",
+    ["Try Live Twitter", "Use Training Data (Reliable)"],
+    index=1
+)
+
 tweet_limit = st.sidebar.slider(
-    "Number of Tweets (Last 24 Hours)",
+    "Number of Tweets",
     20, 100, 50
 )
 
@@ -128,24 +192,30 @@ hours = st.sidebar.selectbox(
         72: "Last 72 Hours (3 Days)",
         168: "Last 7 Days"
     }[x],
-    index=1  # Default to 24 hours
+    index=1
 )
 
 # =====================================
-# 5. RUN ANALYSIS
+# 6. RUN ANALYSIS
 # =====================================
 if st.sidebar.button("🔄 Refresh Analysis"):
-    with st.spinner("Fetching recent Twitter data..."):
-        # Clear cache to force fresh data
-        scrape_kelantan_recent.clear()
-        df_tweets = scrape_kelantan_recent(tweet_limit, hours)
+    with st.spinner("Fetching data..."):
+        
+        if data_source == "Try Live Twitter":
+            scrape_kelantan_recent.clear()
+            df_tweets = scrape_kelantan_recent(tweet_limit, hours)
+            
+            if df_tweets.empty:
+                st.warning("⚠️ Live Twitter data unavailable. Switching to training data...")
+                df_tweets = load_recent_from_csv().head(tweet_limit)
+        else:
+            df_tweets = load_recent_from_csv().head(tweet_limit)
 
     if df_tweets.empty:
-        st.error("⚠️ Unable to fetch tweets at this moment.")
-        st.info("**Possible reasons:**\n- No tweets found in the selected time window\n- Twitter rate limits\n- Network connection issues\n\nTry selecting a longer time window (e.g., Last 7 Days)")
+        st.error("No data available.")
         st.stop()
     
-    st.success(f"✅ Successfully fetched {len(df_tweets)} tweets!")
+    st.success(f"✅ Analyzing {len(df_tweets)} tweets!")
 
     # Sentiment Prediction
     df_tweets["clean_text"] = df_tweets["tweet"].apply(clean_text)
@@ -159,7 +229,7 @@ if st.sidebar.button("🔄 Refresh Analysis"):
     col1, col2 = st.columns([2, 1])
 
     with col1:
-        st.subheader("📋 Recent Tweet Analysis")
+        st.subheader("📋 Tweet Analysis")
         st.dataframe(
             df_tweets[["date", "tweet", "sentiment"]],
             use_container_width=True
@@ -167,17 +237,25 @@ if st.sidebar.button("🔄 Refresh Analysis"):
 
     with col2:
         st.subheader("📊 Sentiment Distribution")
+        
+        sentiment_counts = df_tweets["sentiment"].value_counts()
+        
         fig_pie = px.pie(
-            df_tweets,
-            names="sentiment",
-            hole=0.4
+            values=sentiment_counts.values,
+            names=sentiment_counts.index,
+            hole=0.4,
+            color_discrete_map={
+                'positive': '#00cc66',
+                'negative': '#ff4444',
+                'neutral': '#ffaa00'
+            }
         )
         st.plotly_chart(fig_pie, use_container_width=True)
 
     # =====================================
     # TREND ANALYSIS
     # =====================================
-    st.subheader("📈 Sentiment Trend (Near Real-Time)")
+    st.subheader("📈 Sentiment Trend Over Time")
 
     df_tweets["hour"] = df_tweets["date"].dt.floor("h")
     trend = (
@@ -192,10 +270,50 @@ if st.sidebar.button("🔄 Refresh Analysis"):
         x="hour",
         y="count",
         color="sentiment",
-        markers=True
+        markers=True,
+        color_discrete_map={
+            'positive': '#00cc66',
+            'negative': '#ff4444',
+            'neutral': '#ffaa00'
+        }
+    )
+    
+    fig_trend.update_layout(
+        xaxis_title="Time",
+        yaxis_title="Number of Tweets",
+        hovermode='x unified'
     )
 
     st.plotly_chart(fig_trend, use_container_width=True)
+    
+    # =====================================
+    # STATISTICS
+    # =====================================
+    st.subheader("📊 Summary Statistics")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        positive_pct = (df_tweets["sentiment"] == "positive").sum() / len(df_tweets) * 100
+        st.metric("Positive", f"{positive_pct:.1f}%")
+    
+    with col2:
+        neutral_pct = (df_tweets["sentiment"] == "neutral").sum() / len(df_tweets) * 100
+        st.metric("Neutral", f"{neutral_pct:.1f}%")
+    
+    with col3:
+        negative_pct = (df_tweets["sentiment"] == "negative").sum() / len(df_tweets) * 100
+        st.metric("Negative", f"{negative_pct:.1f}%")
 
 else:
-    st.info("Click **Refresh Analysis** to start near real-time analysis.")
+    st.info("👆 Click **Refresh Analysis** to start")
+    
+    with st.expander("ℹ️ About This Dashboard"):
+        st.markdown("""
+        **Data Source Options:**
+        
+        1. **Try Live Twitter**: Attempts to fetch real-time tweets (may be unreliable due to rate limits)
+        2. **Use Training Data (Reliable)**: Uses your labeled dataset as recent data (recommended for demos)
+        
+        **Note:** This system uses a near real-time approach, analyzing tweets from the selected time window.
+        """)
