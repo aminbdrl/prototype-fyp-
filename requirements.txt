@@ -2,4 +2,5 @@ streamlit
 pandas
 scikit-learn
 plotly
-snscrape
+beautifulsoup4
+requests
