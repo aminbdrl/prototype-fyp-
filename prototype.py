@@ -32,24 +32,49 @@ def clean_text(text):
 
 def is_kelantan_related(text):
     """
-    Check if tweet is actually related to Kelantan
+    Check if tweet is actually related to Kelantan - STRICT filtering
     """
     if not isinstance(text, str):
         return False
     
     text_lower = text.lower()
     
-    # Kelantan-specific keywords
+    # Kelantan-specific keywords (COMPREHENSIVE LIST)
     kelantan_keywords = [
-        'kelantan', 'kelate', 'kecek kelate', 
-        'kota bharu', 'kb', 'pantai cahaya bulan', 'pcb',
+        # Core
+        'kelantan', 'kelate', 'kecek kelate', 'klate',
+        
+        # Cities & Districts
+        'kota bharu', 'kota bahru', 'kb', 'kotabharu',
         'tumpat', 'pasir mas', 'tanah merah', 'machang',
         'kuala krai', 'gua musang', 'pasir puteh', 'bachok',
-        'jeli', 'lojing', 'rantau panjang',
-        'nasi kerabu', 'nasi dagang', 'solok lada',
-        'tok guru', 'pengkalan chepa', 'wakaf che yeh',
-        'pasar siti khadijah', 'pantai irama', 'masjid kampung laut',
-        'orang kelate', 'oghe kelate', 'demo kelate'
+        'jeli', 'lojing', 'rantau panjang', 'pengkalan chepa',
+        'wakaf che yeh', 'wakaf bharu', 'ketereh',
+        
+        # Famous Places
+        'pantai cahaya bulan', 'pcb', 'pantai irama',
+        'pasar siti khadijah', 'pasar besar siti khadijah',
+        'masjid kampung laut', 'istana jahar',
+        'muzium negeri kelantan', 'handicraft village',
+        'bukit marak', 'wat photivihan', 'bukit bunga',
+        
+        # Food (Kelantan Specialty)
+        'nasi kerabu', 'nasi dagang', 'nasi tumpang',
+        'solok lada', 'ayam percik', 'keropok lekor kelate',
+        'budu', 'laksam', 'akok', 'nekbat',
+        
+        # Culture & Dialect
+        'orang kelate', 'oghe kelate', 'demo kelate',
+        'gapo', 'mung', 'pah', 'gak', 'kito',
+        'tok guru', 'mak cik kelantan', 'pak cik kelantan',
+        
+        # Events & Politics
+        'kerajaan negeri kelantan', 'pas kelantan',
+        'pkr kelantan', 'umno kelantan', 'kelantan fc',
+        
+        # Rivers & Nature
+        'sungai kelantan', 'sungai golok', 'gunung stong',
+        'gunung ayam', 'jeram pasu', 'air terjun lata rek'
     ]
     
     return any(keyword in text_lower for keyword in kelantan_keywords)
@@ -63,15 +88,20 @@ def get_kelantan_keywords_found(text):
     
     text_lower = text.lower()
     
+    # Most common Kelantan keywords for display
     kelantan_keywords = [
-        'kelantan', 'kelate', 'kota bharu', 'kb', 
+        'kelantan', 'kelate', 'kota bharu', 'kotabharu', 'kb', 
         'tumpat', 'pasir mas', 'tanah merah', 'machang',
         'kuala krai', 'gua musang', 'pasir puteh', 'bachok',
-        'nasi kerabu', 'nasi dagang', 'orang kelate', 'oghe kelate'
+        'nasi kerabu', 'nasi dagang', 'budu', 'laksam',
+        'orang kelate', 'oghe kelate', 'demo kelate',
+        'pantai cahaya bulan', 'pcb', 'pasar siti khadijah',
+        'tok guru', 'pengkalan chepa', 'wakaf che yeh',
+        'gapo', 'mung', 'kito', 'solok lada', 'ayam percik'
     ]
     
     found = [kw for kw in kelantan_keywords if kw in text_lower]
-    return found
+    return found[:5]  # Show max 5 keywords
 
 # =====================================
 # 2. LOAD DATASET & TRAIN MODEL
@@ -191,23 +221,33 @@ def scrape_kelantan_recent(limit=50, hours=24):
 # 4. ALTERNATIVE: USE YOUR CSV DATA
 # =====================================
 @st.cache_data
-def load_recent_from_csv():
+def load_recent_from_csv(hours=8760):
     """
     Fallback: Use your existing CSV data as 'recent' tweets
+    Simulates data from the last X hours (default: 1 year)
     """
     df = pd.read_csv("prototaip.csv")
     df = df.dropna(subset=["comment/tweet"])
     
-    # Simulate recent dates
-    df["date"] = pd.date_range(
+    # Calculate number of data points based on hours
+    # For 1 year, use all data. For shorter periods, sample proportionally
+    total_hours_in_year = 8760
+    sample_size = min(len(df), int(len(df) * (hours / total_hours_in_year)))
+    sample_size = max(sample_size, 50)  # Minimum 50 tweets
+    
+    # Take the most recent samples
+    df_sample = df.tail(sample_size).copy()
+    
+    # Simulate recent dates based on time window
+    df_sample["date"] = pd.date_range(
         end=datetime.now(),
-        periods=len(df),
-        freq='H'
+        periods=len(df_sample),
+        freq=f'{hours//len(df_sample)}H'
     )
     
-    df = df.rename(columns={"comment/tweet": "tweet"})
+    df_sample = df_sample.rename(columns={"comment/tweet": "tweet"})
     
-    return df[["date", "tweet"]].tail(100)
+    return df_sample[["date", "tweet"]]
 
 # =====================================
 # 5. SIDEBAR CONTROLS
@@ -227,15 +267,17 @@ tweet_limit = st.sidebar.slider(
 
 hours = st.sidebar.selectbox(
     "Time Window",
-    options=[12, 24, 48, 72, 168],
+    options=[12, 24, 48, 72, 168, 720, 8760],
     format_func=lambda x: {
         12: "Last 12 Hours",
         24: "Last 24 Hours (1 Day)",
         48: "Last 48 Hours (2 Days)",
         72: "Last 72 Hours (3 Days)",
-        168: "Last 7 Days"
+        168: "Last 7 Days (1 Week)",
+        720: "Last 30 Days (1 Month)",
+        8760: "Last 365 Days (1 Year)"
     }[x],
-    index=1
+    index=6  # Default to 1 year
 )
 
 # =====================================
@@ -250,9 +292,9 @@ if st.sidebar.button("🔄 Refresh Analysis"):
             
             if df_tweets.empty:
                 st.warning("⚠️ Live Twitter data unavailable. Switching to training data...")
-                df_tweets = load_recent_from_csv().head(tweet_limit)
+                df_tweets = load_recent_from_csv(hours).head(tweet_limit)
         else:
-            df_tweets = load_recent_from_csv().head(tweet_limit)
+            df_tweets = load_recent_from_csv(hours).head(tweet_limit)
 
     if df_tweets.empty:
         st.error("No data available.")
@@ -337,17 +379,30 @@ if st.sidebar.button("🔄 Refresh Analysis"):
     # =====================================
     st.subheader("📈 Sentiment Trend Over Time")
 
-    df_tweets["hour"] = df_tweets["date"].dt.floor("h")
+    # Dynamic time grouping based on time window
+    if hours <= 48:  # 2 days or less - group by hour
+        df_tweets["time_group"] = df_tweets["date"].dt.floor("h")
+        time_label = "Hour"
+    elif hours <= 168:  # 1 week or less - group by day
+        df_tweets["time_group"] = df_tweets["date"].dt.floor("D")
+        time_label = "Day"
+    elif hours <= 720:  # 1 month or less - group by day
+        df_tweets["time_group"] = df_tweets["date"].dt.floor("D")
+        time_label = "Day"
+    else:  # More than 1 month - group by week
+        df_tweets["time_group"] = df_tweets["date"].dt.to_period("W").dt.to_timestamp()
+        time_label = "Week"
+    
     trend = (
         df_tweets
-        .groupby(["hour", "sentiment"])
+        .groupby(["time_group", "sentiment"])
         .size()
         .reset_index(name="count")
     )
 
     fig_trend = px.line(
         trend,
-        x="hour",
+        x="time_group",
         y="count",
         color="sentiment",
         markers=True,
@@ -359,7 +414,7 @@ if st.sidebar.button("🔄 Refresh Analysis"):
     )
     
     fig_trend.update_layout(
-        xaxis_title="Time",
+        xaxis_title=f"Time ({time_label})",
         yaxis_title="Number of Tweets",
         hovermode='x unified'
     )
