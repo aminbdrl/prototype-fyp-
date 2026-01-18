@@ -183,11 +183,20 @@ hours = st.sidebar.selectbox(
 )
 
 # =====================================
-# 5. RUN ANALYSIS
+# 6. RUN ANALYSIS
 # =====================================
 if st.sidebar.button("🔄 Refresh Analysis"):
-    with st.spinner("Loading Kelantan tweet data..."):
-        df_tweets = load_kelantan_tweets(hours).head(tweet_limit)
+    with st.spinner("Fetching data..."):
+        
+        if data_source == "Try Live Twitter":
+            scrape_kelantan_recent.clear()
+            df_tweets = scrape_kelantan_recent(tweet_limit, hours)
+            
+            if df_tweets.empty:
+                st.warning("⚠️ Live Twitter data unavailable. Switching to training data...")
+                df_tweets = load_recent_from_csv(hours).head(tweet_limit)
+        else:
+            df_tweets = load_recent_from_csv(hours).head(tweet_limit)
 
     if df_tweets.empty:
         st.error("No data available.")
