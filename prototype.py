@@ -20,7 +20,7 @@ st.set_page_config(
 st.title("📊 Near Real-Time Sentiment Analysis Dashboard — Kelantan")
 
 # =====================================
-# 1. TEXT PREPROCESSING
+# 1. TEXT PREPROCESSING & VALIDATION
 # =====================================
 def clean_text(text):
     if not isinstance(text, str):
@@ -29,6 +29,49 @@ def clean_text(text):
     text = re.sub(r"http\S+|www\S+|@\w+|#\w+", "", text)
     text = re.sub(r"[^a-z\s']", "", text)
     return text.strip()
+
+def is_kelantan_related(text):
+    """
+    Check if tweet is actually related to Kelantan
+    """
+    if not isinstance(text, str):
+        return False
+    
+    text_lower = text.lower()
+    
+    # Kelantan-specific keywords
+    kelantan_keywords = [
+        'kelantan', 'kelate', 'kecek kelate', 
+        'kota bharu', 'kb', 'pantai cahaya bulan', 'pcb',
+        'tumpat', 'pasir mas', 'tanah merah', 'machang',
+        'kuala krai', 'gua musang', 'pasir puteh', 'bachok',
+        'jeli', 'lojing', 'rantau panjang',
+        'nasi kerabu', 'nasi dagang', 'solok lada',
+        'tok guru', 'pengkalan chepa', 'wakaf che yeh',
+        'pasar siti khadijah', 'pantai irama', 'masjid kampung laut',
+        'orang kelate', 'oghe kelate', 'demo kelate'
+    ]
+    
+    return any(keyword in text_lower for keyword in kelantan_keywords)
+
+def get_kelantan_keywords_found(text):
+    """
+    Return which Kelantan keywords were found in the text
+    """
+    if not isinstance(text, str):
+        return []
+    
+    text_lower = text.lower()
+    
+    kelantan_keywords = [
+        'kelantan', 'kelate', 'kota bharu', 'kb', 
+        'tumpat', 'pasir mas', 'tanah merah', 'machang',
+        'kuala krai', 'gua musang', 'pasir puteh', 'bachok',
+        'nasi kerabu', 'nasi dagang', 'orang kelate', 'oghe kelate'
+    ]
+    
+    found = [kw for kw in kelantan_keywords if kw in text_lower]
+    return found
 
 # =====================================
 # 2. LOAD DATASET & TRAIN MODEL
@@ -217,6 +260,30 @@ if st.sidebar.button("🔄 Refresh Analysis"):
     
     st.success(f"✅ Analyzing {len(df_tweets)} tweets!")
 
+    # Filter for Kelantan-related tweets only
+    df_tweets["is_kelantan"] = df_tweets["tweet"].apply(is_kelantan_related)
+    df_tweets["kelantan_keywords"] = df_tweets["tweet"].apply(get_kelantan_keywords_found)
+    
+    # Show filtering stats
+    total_tweets = len(df_tweets)
+    kelantan_tweets = df_tweets["is_kelantan"].sum()
+    
+    col_stat1, col_stat2, col_stat3 = st.columns(3)
+    with col_stat1:
+        st.metric("Total Tweets Fetched", total_tweets)
+    with col_stat2:
+        st.metric("✅ Kelantan-Related", kelantan_tweets)
+    with col_stat3:
+        relevance_pct = (kelantan_tweets / total_tweets * 100) if total_tweets > 0 else 0
+        st.metric("Relevance Rate", f"{relevance_pct:.1f}%")
+    
+    # Filter to only Kelantan tweets
+    df_tweets = df_tweets[df_tweets["is_kelantan"]].copy()
+    
+    if df_tweets.empty:
+        st.warning("⚠️ No Kelantan-related tweets found. Try a different time window.")
+        st.stop()
+
     # Sentiment Prediction
     df_tweets["clean_text"] = df_tweets["tweet"].apply(clean_text)
     df_tweets["sentiment"] = model.predict(
@@ -230,9 +297,22 @@ if st.sidebar.button("🔄 Refresh Analysis"):
 
     with col1:
         st.subheader("📋 Tweet Analysis")
+        
+        # Add keyword column for display
+        display_df = df_tweets[["date", "tweet", "sentiment", "kelantan_keywords"]].copy()
+        display_df["kelantan_keywords"] = display_df["kelantan_keywords"].apply(
+            lambda x: ", ".join(x) if x else ""
+        )
+        
         st.dataframe(
-            df_tweets[["date", "tweet", "sentiment"]],
-            use_container_width=True
+            display_df,
+            use_container_width=True,
+            column_config={
+                "date": "Date/Time",
+                "tweet": st.column_config.TextColumn("Tweet", width="large"),
+                "sentiment": "Sentiment",
+                "kelantan_keywords": "Kelantan Keywords Found"
+            }
         )
 
     with col2:
@@ -314,6 +394,11 @@ else:
         
         1. **Try Live Twitter**: Attempts to fetch real-time tweets (may be unreliable due to rate limits)
         2. **Use Training Data (Reliable)**: Uses your labeled dataset as recent data (recommended for demos)
+        
+        **Kelantan Validation:**
+        - System automatically filters tweets to ensure they're Kelantan-related
+        - Checks for keywords like: Kelantan, Kelate, Kota Bharu, Tumpat, Nasi Kerabu, etc.
+        - Shows "Kelantan Keywords Found" column to verify relevance
         
         **Note:** This system uses a near real-time approach, analyzing tweets from the selected time window.
         """)
