@@ -334,33 +334,19 @@ if st.sidebar.button("🔄 Refresh Analysis"):
         st.metric("Negative", f"{negative_pct:.1f}%")
 
 else:
-    st.info("👆 Click **Refresh Analysis** to start analyzing Kelantan sentiment data")
+    st.info("👆 Click **Refresh Analysis** to start")
     
     with st.expander("ℹ️ About This Dashboard"):
         st.markdown("""
-        **Kelantan Sentiment Analysis Dashboard**
+        **Data Source Options:**
         
-        This system analyzes sentiment from Kelantan-related social media data using:
-        
-        **Data Source:**
-        - Pre-collected Twitter/social media data about Kelantan
-        - Labeled dataset with sentiment annotations
-        - Time-windowed analysis (from 12 hours to 1 year)
+        1. **Try Live Twitter**: Attempts to fetch real-time tweets (may be unreliable due to rate limits)
+        2. **Use Training Data (Reliable)**: Uses your labeled dataset as recent data (recommended for demos)
         
         **Kelantan Validation:**
-        - Automatically filters tweets to ensure Kelantan relevance
-        - Checks for 70+ Kelantan-specific keywords including:
-          - **Places**: Kelantan, Kota Bharu, Tumpat, Gua Musang, etc.
-          - **Food**: Nasi Kerabu, Nasi Dagang, Budu, Laksam, etc.
-          - **Dialect**: Kelate, Orang Kelate, Gapo, Mung, Kito, etc.
-          - **Landmarks**: Pantai Cahaya Bulan, Pasar Siti Khadijah, etc.
-        - Shows "Kelantan Keywords Found" for verification
+        - System automatically filters tweets to ensure they're Kelantan-related
+        - Checks for keywords like: Kelantan, Kelate, Kota Bharu, Tumpat, Nasi Kerabu, etc.
+        - Shows "Kelantan Keywords Found" column to verify relevance
         
-        **Sentiment Analysis:**
-        - Uses Machine Learning (Naive Bayes) trained on labeled data
-        - Classifies tweets as: Positive, Negative, or Neutral
-        - Visualizes trends over time
-        
-        **Time Windows Available:**
-        - 12 Hours, 1 Day, 2 Days, 3 Days, 1 Week, 1 Month, 1 Year
+        **Note:** This system uses a near real-time approach, analyzing tweets from the selected time window.
         """)
