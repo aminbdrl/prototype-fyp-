@@ -4,7 +4,6 @@ import re
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 import plotly.express as px
-import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import requests
 from bs4 import BeautifulSoup
@@ -189,26 +188,30 @@ def scrape_kelantan_recent(limit=50, hours=24):
     return df.head(limit)
 
 # =====================================
-# 4. ALTERNATIVE: USE YOUR CSV DATA
+# 4. LOAD ALL KELANTAN DATA FROM CSV
 # =====================================
 @st.cache_data
-def load_recent_from_csv():
+def load_all_kelantan_data():
     """
-    Fallback: Use your existing CSV data as 'recent' tweets
+    Load complete dataset and filter for Kelantan-related content only
     """
     df = pd.read_csv("prototaip.csv")
     df = df.dropna(subset=["comment/tweet"])
     
-    # Simulate recent dates
+    # Simulate recent dates across the entire dataset
     df["date"] = pd.date_range(
         end=datetime.now(),
         periods=len(df),
-        freq='H'
+        freq='30min'  # More granular time intervals
     )
     
     df = df.rename(columns={"comment/tweet": "tweet"})
     
-    return df[["date", "tweet"]].tail(100)
+    # Filter for Kelantan-related only
+    df["is_kelantan"] = df["tweet"].apply(is_kelantan_related)
+    df_kelantan = df[df["is_kelantan"]].copy()
+    
+    return df_kelantan[["date", "tweet"]].reset_index(drop=True)
 
 # =====================================
 # 5. SIDEBAR CONTROLS
@@ -217,207 +220,95 @@ st.sidebar.header("⚙️ Controls")
 
 data_source = st.sidebar.radio(
     "Data Source",
-    ["Try Live Twitter", "Use Training Data (Reliable)"],
+    ["Try Live Twitter", "Use Complete Kelantan Dataset"],
     index=1
 )
 
-tweet_limit = st.sidebar.slider(
-    "Number of Tweets",
-    20, 100, 50
-)
+# Get total count of Kelantan tweets in dataset
+@st.cache_data
+def get_total_kelantan_count():
+    df = pd.read_csv("prototaip.csv")
+    df = df.dropna(subset=["comment/tweet"])
+    df = df.rename(columns={"comment/tweet": "tweet"})
+    df["is_kelantan"] = df["tweet"].apply(is_kelantan_related)
+    return df["is_kelantan"].sum()
 
-hours = st.sidebar.selectbox(
-    "Time Window",
-    options=[12, 24, 48, 72, 168],
-    format_func=lambda x: {
-        12: "Last 12 Hours",
-        24: "Last 24 Hours (1 Day)",
-        48: "Last 48 Hours (2 Days)",
-        72: "Last 72 Hours (3 Days)",
-        168: "Last 7 Days"
-    }[x],
-    index=1
-)
+total_kelantan = get_total_kelantan_count()
+
+if data_source == "Try Live Twitter":
+    tweet_limit = st.sidebar.slider(
+        "Number of Tweets",
+        20, 200, 100
+    )
+    
+    hours = st.sidebar.selectbox(
+        "Time Window",
+        options=[12, 24, 48, 72, 168],
+        format_func=lambda x: {
+            12: "Last 12 Hours",
+            24: "Last 24 Hours (1 Day)",
+            48: "Last 48 Hours (2 Days)",
+            72: "Last 72 Hours (3 Days)",
+            168: "Last 7 Days"
+        }[x],
+        index=1
+    )
+else:
+    st.sidebar.slider(
+        "Number of Tweets",
+        min_value=total_kelantan,
+        max_value=total_kelantan,
+        value=total_kelantan,
+        disabled=True,
+        help=f"Complete dataset contains {total_kelantan} Kelantan-related tweets"
+    )
+    st.sidebar.success(f"📊 Loading all {total_kelantan} Kelantan tweets")
 
 # =====================================
 # 6. RUN ANALYSIS
 # =====================================
 if st.sidebar.button("🔄 Refresh Analysis"):
-    with st.spinner("Fetching data..."):
+    with st.spinner("Loading data..."):
         
         if data_source == "Try Live Twitter":
             scrape_kelantan_recent.clear()
-            df_tweets_all = scrape_kelantan_recent(tweet_limit, hours)
+            df_tweets = scrape_kelantan_recent(tweet_limit, hours)
             
-            if df_tweets_all.empty:
-                st.warning("⚠️ Live Twitter data unavailable. Switching to training data...")
-                df_tweets_all = load_recent_from_csv().head(tweet_limit)
+            if df_tweets.empty:
+                st.warning("⚠️ Live Twitter data unavailable. Loading complete dataset...")
+                df_tweets = load_all_kelantan_data()
+            else:
+                # Filter for Kelantan
+                df_tweets["is_kelantan"] = df_tweets["tweet"].apply(is_kelantan_related)
+                df_tweets = df_tweets[df_tweets["is_kelantan"]].copy()
         else:
-            df_tweets_all = load_recent_from_csv().head(tweet_limit)
+            df_tweets = load_all_kelantan_data()
 
-    if df_tweets_all.empty:
-        st.error("No data available.")
+    if df_tweets.empty:
+        st.error("No Kelantan-related data available.")
         st.stop()
     
-    st.success(f"✅ Fetched {len(df_tweets_all)} tweets!")
+    st.success(f"✅ Analyzing {len(df_tweets)} Kelantan-related tweets!")
 
-    # Analyze ALL tweets first
-    df_tweets_all["clean_text"] = df_tweets_all["tweet"].apply(clean_text)
-    df_tweets_all["sentiment"] = model.predict(
-        vectorizer.transform(df_tweets_all["clean_text"])
+    # Add Kelantan keywords
+    df_tweets["kelantan_keywords"] = df_tweets["tweet"].apply(get_kelantan_keywords_found)
+    
+    # Sentiment Prediction
+    df_tweets["clean_text"] = df_tweets["tweet"].apply(clean_text)
+    df_tweets["sentiment"] = model.predict(
+        vectorizer.transform(df_tweets["clean_text"])
     )
-    
-    # Filter for Kelantan-related tweets
-    df_tweets_all["is_kelantan"] = df_tweets_all["tweet"].apply(is_kelantan_related)
-    df_tweets_all["kelantan_keywords"] = df_tweets_all["tweet"].apply(get_kelantan_keywords_found)
-    
-    # Create separate dataframes
-    df_kelantan = df_tweets_all[df_tweets_all["is_kelantan"]].copy()
-    
-    # Show filtering stats
-    total_tweets = len(df_tweets_all)
-    kelantan_tweets = len(df_kelantan)
-    
-    st.subheader("🔍 Filtering Results")
-    col_stat1, col_stat2, col_stat3 = st.columns(3)
-    with col_stat1:
-        st.metric("Total Tweets Fetched", total_tweets)
-    with col_stat2:
-        st.metric("✅ Kelantan-Related", kelantan_tweets)
-    with col_stat3:
-        relevance_pct = (kelantan_tweets / total_tweets * 100) if total_tweets > 0 else 0
-        st.metric("Relevance Rate", f"{relevance_pct:.1f}%")
-    
+
     # =====================================
-    # COMPARISON SECTION
+    # DISPLAY RESULTS
     # =====================================
-    st.subheader("📊 Comparison: All Tweets vs Kelantan-Related Tweets")
-    
-    col1, col2 = st.columns(2)
-    
+    col1, col2 = st.columns([2, 1])
+
     with col1:
-        st.markdown("### All Tweets")
-        sentiment_all = df_tweets_all["sentiment"].value_counts()
+        st.subheader("📋 Kelantan Tweet Analysis")
         
-        fig_all = px.pie(
-            values=sentiment_all.values,
-            names=sentiment_all.index,
-            title=f"Sentiment Distribution (n={total_tweets})",
-            hole=0.4,
-            color_discrete_map={
-                'positive': '#00cc66',
-                'negative': '#ff4444',
-                'neutral': '#ffaa00'
-            }
-        )
-        st.plotly_chart(fig_all, use_container_width=True)
-        
-        # Stats for all tweets
-        st.markdown("**Breakdown:**")
-        for sentiment in ['positive', 'neutral', 'negative']:
-            count = sentiment_all.get(sentiment, 0)
-            pct = (count / total_tweets * 100) if total_tweets > 0 else 0
-            st.write(f"- {sentiment.capitalize()}: {count} ({pct:.1f}%)")
-    
-    with col2:
-        st.markdown("### Kelantan-Related Only")
-        
-        if kelantan_tweets > 0:
-            sentiment_kelantan = df_kelantan["sentiment"].value_counts()
-            
-            fig_kelantan = px.pie(
-                values=sentiment_kelantan.values,
-                names=sentiment_kelantan.index,
-                title=f"Sentiment Distribution (n={kelantan_tweets})",
-                hole=0.4,
-                color_discrete_map={
-                    'positive': '#00cc66',
-                    'negative': '#ff4444',
-                    'neutral': '#ffaa00'
-                }
-            )
-            st.plotly_chart(fig_kelantan, use_container_width=True)
-            
-            # Stats for Kelantan tweets
-            st.markdown("**Breakdown:**")
-            for sentiment in ['positive', 'neutral', 'negative']:
-                count = sentiment_kelantan.get(sentiment, 0)
-                pct = (count / kelantan_tweets * 100) if kelantan_tweets > 0 else 0
-                st.write(f"- {sentiment.capitalize()}: {count} ({pct:.1f}%)")
-        else:
-            st.warning("No Kelantan-related tweets found")
-    
-    # =====================================
-    # SIDE-BY-SIDE BAR CHART COMPARISON
-    # =====================================
-    st.subheader("📊 Sentiment Comparison Chart")
-    
-    # Prepare data for comparison
-    comparison_data = []
-    
-    for sentiment in ['positive', 'neutral', 'negative']:
-        all_count = sentiment_all.get(sentiment, 0)
-        all_pct = (all_count / total_tweets * 100) if total_tweets > 0 else 0
-        
-        if kelantan_tweets > 0:
-            kelantan_count = df_kelantan["sentiment"].value_counts().get(sentiment, 0)
-            kelantan_pct = (kelantan_count / kelantan_tweets * 100) if kelantan_tweets > 0 else 0
-        else:
-            kelantan_pct = 0
-        
-        comparison_data.append({
-            'Sentiment': sentiment.capitalize(),
-            'All Tweets': all_pct,
-            'Kelantan-Related': kelantan_pct
-        })
-    
-    df_comparison = pd.DataFrame(comparison_data)
-    
-    fig_comparison = go.Figure()
-    
-    fig_comparison.add_trace(go.Bar(
-        name='All Tweets',
-        x=df_comparison['Sentiment'],
-        y=df_comparison['All Tweets'],
-        marker_color='lightblue',
-        text=df_comparison['All Tweets'].round(1),
-        texttemplate='%{text}%',
-        textposition='outside'
-    ))
-    
-    fig_comparison.add_trace(go.Bar(
-        name='Kelantan-Related',
-        x=df_comparison['Sentiment'],
-        y=df_comparison['Kelantan-Related'],
-        marker_color=['#00cc66', '#ffaa00', '#ff4444'],
-        text=df_comparison['Kelantan-Related'].round(1),
-        texttemplate='%{text}%',
-        textposition='outside'
-    ))
-    
-    fig_comparison.update_layout(
-        barmode='group',
-        yaxis_title='Percentage (%)',
-        xaxis_title='Sentiment',
-        height=400,
-        legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1
-        )
-    )
-    
-    st.plotly_chart(fig_comparison, use_container_width=True)
-
-    # =====================================
-    # DETAILED TWEET ANALYSIS
-    # =====================================
-    if kelantan_tweets > 0:
-        st.subheader("📋 Kelantan-Related Tweets Analysis")
-        
-        display_df = df_kelantan[["date", "tweet", "sentiment", "kelantan_keywords"]].copy()
+        # Add keyword column for display
+        display_df = df_tweets[["date", "tweet", "sentiment", "kelantan_keywords"]].copy()
         display_df["kelantan_keywords"] = display_df["kelantan_keywords"].apply(
             lambda x: ", ".join(x) if x else ""
         )
@@ -425,6 +316,7 @@ if st.sidebar.button("🔄 Refresh Analysis"):
         st.dataframe(
             display_df,
             use_container_width=True,
+            height=400,
             column_config={
                 "date": "Date/Time",
                 "tweet": st.column_config.TextColumn("Tweet", width="large"),
@@ -433,41 +325,78 @@ if st.sidebar.button("🔄 Refresh Analysis"):
             }
         )
 
-        # =====================================
-        # TREND ANALYSIS (Kelantan only)
-        # =====================================
-        st.subheader("📈 Sentiment Trend Over Time (Kelantan-Related)")
-
-        df_kelantan["hour"] = df_kelantan["date"].dt.floor("h")
-        trend = (
-            df_kelantan
-            .groupby(["hour", "sentiment"])
-            .size()
-            .reset_index(name="count")
-        )
-
-        fig_trend = px.line(
-            trend,
-            x="hour",
-            y="count",
-            color="sentiment",
-            markers=True,
+    with col2:
+        st.subheader("📊 Sentiment Distribution")
+        
+        sentiment_counts = df_tweets["sentiment"].value_counts()
+        
+        fig_pie = px.pie(
+            values=sentiment_counts.values,
+            names=sentiment_counts.index,
+            hole=0.4,
             color_discrete_map={
                 'positive': '#00cc66',
                 'negative': '#ff4444',
                 'neutral': '#ffaa00'
             }
         )
-        
-        fig_trend.update_layout(
-            xaxis_title="Time",
-            yaxis_title="Number of Tweets",
-            hovermode='x unified'
-        )
+        st.plotly_chart(fig_pie, use_container_width=True)
 
-        st.plotly_chart(fig_trend, use_container_width=True)
-    else:
-        st.warning("⚠️ No Kelantan-related tweets found in the dataset. Try a different time window or data source.")
+    # =====================================
+    # TREND ANALYSIS
+    # =====================================
+    st.subheader("📈 Sentiment Trend Over Time")
+
+    df_tweets["hour"] = df_tweets["date"].dt.floor("h")
+    trend = (
+        df_tweets
+        .groupby(["hour", "sentiment"])
+        .size()
+        .reset_index(name="count")
+    )
+
+    fig_trend = px.line(
+        trend,
+        x="hour",
+        y="count",
+        color="sentiment",
+        markers=True,
+        color_discrete_map={
+            'positive': '#00cc66',
+            'negative': '#ff4444',
+            'neutral': '#ffaa00'
+        }
+    )
+    
+    fig_trend.update_layout(
+        xaxis_title="Time",
+        yaxis_title="Number of Tweets",
+        hovermode='x unified'
+    )
+
+    st.plotly_chart(fig_trend, use_container_width=True)
+    
+    # =====================================
+    # STATISTICS
+    # =====================================
+    st.subheader("📊 Summary Statistics")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric("Total Tweets", len(df_tweets))
+    
+    with col2:
+        positive_pct = (df_tweets["sentiment"] == "positive").sum() / len(df_tweets) * 100
+        st.metric("Positive", f"{positive_pct:.1f}%")
+    
+    with col3:
+        neutral_pct = (df_tweets["sentiment"] == "neutral").sum() / len(df_tweets) * 100
+        st.metric("Neutral", f"{neutral_pct:.1f}%")
+    
+    with col4:
+        negative_pct = (df_tweets["sentiment"] == "negative").sum() / len(df_tweets) * 100
+        st.metric("Negative", f"{negative_pct:.1f}%")
 
 else:
     st.info("👆 Click **Refresh Analysis** to start")
@@ -477,13 +406,14 @@ else:
         **Data Source Options:**
         
         1. **Try Live Twitter**: Attempts to fetch real-time tweets (may be unreliable due to rate limits)
-        2. **Use Training Data (Reliable)**: Uses your labeled dataset as recent data (recommended for demos)
+        2. **Use Complete Kelantan Dataset**: Analyzes ALL Kelantan-related tweets from your training data
         
-        **Comparison Features:**
+        **Features:**
         
-        - **All Tweets**: Shows sentiment distribution of all fetched tweets
-        - **Kelantan-Related**: Shows sentiment distribution after filtering for Kelantan-specific content
-        - **Relevance Rate**: Percentage of tweets that are actually about Kelantan
+        - Automatically filters for Kelantan-specific content only
+        - Shows complete dataset when using CSV option
+        - Displays which Kelantan keywords were found in each tweet
+        - Provides trend analysis and sentiment distribution
         
-        This helps you understand how filtering affects sentiment analysis and ensures you're only analyzing relevant local content.
+        **Note:** The complete dataset option gives you the most comprehensive analysis of Kelantan sentiment.
         """)
