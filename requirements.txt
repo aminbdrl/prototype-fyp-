@@ -1,14 +1,5 @@
-# Data handling and UI
 streamlit
+ntscraper
 pandas
-datasets
-
-# Machine Learning & AI
 scikit-learn
-transformers
-torch
-
-# Visualizations
 plotly
-matplotlib
-wordcloud
