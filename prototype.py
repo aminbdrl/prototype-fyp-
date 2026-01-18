@@ -5,7 +5,8 @@ from datasets import load_dataset
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 import plotly.express as px
-from textblob import TextBlob
+import nltk
+from nltk.sentiment import SentimentIntensityAnalyzer
 
 # =====================================
 # PAGE CONFIG
@@ -81,13 +82,20 @@ def train_model(df):
     return vectorizer, model
 
 # =====================================
-# SIMPLE SENTIMENT FUNCTION (TextBlob)
+# SENTIMENT (VADER)
 # =====================================
+@st.cache_resource
+def load_sentiment_model():
+    nltk.download("vader_lexicon")
+    return SentimentIntensityAnalyzer()
+
+sia = load_sentiment_model()
+
 def get_sentiment(text):
-    analysis = TextBlob(text)
-    if analysis.sentiment.polarity > 0:
+    score = sia.polarity_scores(text)["compound"]
+    if score > 0.05:
         return "Positive"
-    elif analysis.sentiment.polarity < 0:
+    elif score < -0.05:
         return "Negative"
     else:
         return "Neutral"
@@ -149,7 +157,7 @@ else:
 **Kelantan Social Unity Sentiment Analysis**
 
 • Dataset: Malaysian Twitter by Topics  
-• Models: TF-IDF + Naive Bayes (topics) + TextBlob (sentiment)  
+• Models: TF-IDF + Naive Bayes (topics) + VADER (sentiment)  
 • Filtering: Keyword-based Kelantan detection  
 • Purpose: Analyse both **topics** and **sentiment** in Kelantan-related tweets
 """)
