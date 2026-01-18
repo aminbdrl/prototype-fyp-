@@ -15,7 +15,7 @@ st.set_page_config(
 )
 
 st.title("📊 Kelantan Social Unity Sentiment Analysis")
-st.caption("Dataset: Malaysian Twitter Sentiment (Hugging Face)")
+st.caption("Dataset: Malaysian Twitter by Topics (Hugging Face)")
 
 # =====================================
 # TEXT CLEANING
@@ -45,14 +45,15 @@ def is_kelantan(text):
     return any(k in text for k in KELANTAN_KEYWORDS)
 
 # =====================================
-# LOAD DATASET (SCRIPT-FREE)
+# LOAD DATASET
 # =====================================
 @st.cache_data
 def load_data():
-    dataset = load_dataset("malaysian-twitter-sentiment")
+    dataset = load_dataset("malaysia-ai/malaysian-twitter-by-topics")
     df = dataset["train"].to_pandas()
 
-    df = df.rename(columns={"text": "tweet", "label": "sentiment"})
+    # Rename and clean
+    df = df.rename(columns={"text": "tweet", "label": "topic"})
     df["clean_tweet"] = df["tweet"].apply(clean_text)
     return df
 
@@ -63,7 +64,7 @@ def load_data():
 def train_model(df):
     vectorizer = TfidfVectorizer(max_features=5000)
     X = vectorizer.fit_transform(df["clean_tweet"])
-    y = df["sentiment"]
+    y = df["topic"]
 
     model = MultinomialNB()
     model.fit(X, y)
@@ -73,8 +74,6 @@ def train_model(df):
 with st.spinner("Loading dataset & training model..."):
     df_all = load_data()
     vectorizer, model = train_model(df_all)
-
-LABEL_MAP = {0: "Negative", 1: "Neutral", 2: "Positive"}
 
 # =====================================
 # SIDEBAR
@@ -98,24 +97,22 @@ if st.sidebar.button("Run Analysis"):
     df_kelantan["prediction"] = model.predict(
         vectorizer.transform(df_kelantan["clean_tweet"])
     )
-    df_kelantan["sentiment_label"] = df_kelantan["prediction"].map(LABEL_MAP)
 
     # METRICS
-    c1, c2, c3 = st.columns(3)
+    c1, c2 = st.columns(2)
     c1.metric("Total Tweets", len(df_kelantan))
-    c2.metric("Positive (%)", f"{(df_kelantan['sentiment_label']=='Positive').mean()*100:.1f}")
-    c3.metric("Negative (%)", f"{(df_kelantan['sentiment_label']=='Negative').mean()*100:.1f}")
+    c2.metric("Unique Topics", df_kelantan["prediction"].nunique())
 
     # TABLE
     st.subheader("📋 Kelantan Tweets")
     st.dataframe(
-        df_kelantan[["tweet", "sentiment_label"]],
+        df_kelantan[["tweet", "prediction"]],
         use_container_width=True
     )
 
     # PIE CHART
-    st.subheader("📊 Sentiment Distribution")
-    fig = px.pie(df_kelantan, names="sentiment_label", hole=0.4)
+    st.subheader("📊 Topic Distribution")
+    fig = px.pie(df_kelantan, names="prediction", hole=0.4)
     st.plotly_chart(fig, use_container_width=True)
 
 else:
@@ -125,10 +122,10 @@ else:
         st.markdown("""
 **Kelantan Social Unity Sentiment Analysis**
 
-• Dataset: Malaysian Twitter Sentiment  
+• Dataset: Malaysian Twitter by Topics  
 • Model: TF-IDF + Naive Bayes  
 • Filtering: Keyword-based Kelantan detection  
-• Purpose: Analyse public sentiment related to social unity in Kelantan
+• Purpose: Analyse public discourse related to Kelantan topics
 
-This dataset was selected due to its stability and script-free access.
+This dataset was selected for its relevance and coverage of Malaysian Twitter content.
 """)
