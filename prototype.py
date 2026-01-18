@@ -35,10 +35,14 @@ def clean_text(text):
 def get_nitter_scraper():
     return Nitter(
         log_level=1,
+        skip_instance_check=False,
         instances=[
-            "https://nitter.net",
+            "https://nitter.privacydev.net",
             "https://nitter.poast.org",
-            "https://nitter.fdn.fr"
+            "https://nitter.net",
+            "https://nitter.fdn.fr",
+            "https://nitter.unixfox.eu",
+            "https://nitter.it"
         ]
     )
 
@@ -72,74 +76,82 @@ vectorizer, model = load_and_train()
 # =====================================
 # 4. SCRAPE KELANTAN TWEETS (NEAR REAL-TIME)
 # =====================================
-@st.cache_data(ttl=3600)  # cache for 1 hour
+@st.cache_data(ttl=1800)  # cache for 30 minutes
 def scrape_kelantan_recent(limit=50, hours=24):
     """
     Fetch tweets from the last X hours (near real-time).
     Falls back to broader search if time-filtered search fails.
     """
-    # Try with time filter first
-    since_time = (datetime.utcnow() - timedelta(hours=hours)).strftime('%Y-%m-%d')
-    query_time = f"Kelantan OR orang kelantan since:{since_time}"
+    queries = [
+        "Kelantan",
+        "#Kelantan",
+        "orang kelantan",
+        "Kelantan Malaysia"
+    ]
     
-    # Fallback query without time filter
-    query_broad = "Kelantan OR orang kelantan"
-
-    # Try time-filtered search first
-    try:
-        result = scraper.get_tweets(
-            query_time,
-            mode="term",
-            number=limit,
-            language="ms"
-        )
-        
-        # If we got results, use them
-        if result and result.get("tweets"):
-            tweets = []
-            for t in result.get("tweets", []):
-                tweets.append({
-                    "date": t.get("date"),
-                    "tweet": t.get("text")
-                })
+    all_tweets = []
+    
+    # Try each query
+    for query in queries:
+        try:
+            result = scraper.get_tweets(
+                query,
+                mode="term",
+                number=limit // len(queries) + 10,
+                language="ms"
+            )
             
-            df = pd.DataFrame(tweets)
-            if not df.empty:
-                df["date"] = pd.to_datetime(
-                    df["date"].str.replace("·", "", regex=False),
-                    errors="coerce"
-                )
-                return df
-    except Exception:
-        pass
+            if result and result.get("tweets"):
+                for t in result.get("tweets", []):
+                    all_tweets.append({
+                        "date": t.get("date"),
+                        "tweet": t.get("text")
+                    })
+                
+                # If we got enough tweets, break
+                if len(all_tweets) >= limit:
+                    break
+        except Exception as e:
+            continue
     
-    # Fallback: try broader search without time filter
-    try:
-        result = scraper.get_tweets(
-            query_broad,
-            mode="term",
-            number=limit,
-            language="ms"
-        )
-    except Exception:
+    # If still no tweets, try without language filter
+    if len(all_tweets) < 10:
+        try:
+            result = scraper.get_tweets(
+                "Kelantan",
+                mode="term",
+                number=limit
+            )
+            
+            if result and result.get("tweets"):
+                for t in result.get("tweets", []):
+                    all_tweets.append({
+                        "date": t.get("date"),
+                        "tweet": t.get("text")
+                    })
+        except Exception:
+            pass
+    
+    if not all_tweets:
         return pd.DataFrame()
-
-    tweets = []
-    for t in result.get("tweets", []):
-        tweets.append({
-            "date": t.get("date"),
-            "tweet": t.get("text")
-        })
-
-    df = pd.DataFrame(tweets)
-
+    
+    df = pd.DataFrame(all_tweets)
+    
+    # Remove duplicates
+    df = df.drop_duplicates(subset=['tweet'])
+    
     if not df.empty:
         df["date"] = pd.to_datetime(
             df["date"].str.replace("·", "", regex=False),
             errors="coerce"
         )
-
-    return df
+        
+        # Filter by time window if possible
+        if hours and not df["date"].isna().all():
+            cutoff = datetime.utcnow() - timedelta(hours=hours)
+            df = df[df["date"] >= cutoff]
+    
+    return df.head(limit)
 
 # =====================================
 # 5. SIDEBAR CONTROLS
@@ -153,8 +165,15 @@ tweet_limit = st.sidebar.slider(
 
 hours = st.sidebar.selectbox(
     "Time Window",
-    [24, 48],
-    index=0
+    options=[12, 24, 48, 72, 168],
+    format_func=lambda x: {
+        12: "Last 12 Hours",
+        24: "Last 24 Hours (1 Day)",
+        48: "Last 48 Hours (2 Days)",
+        72: "Last 72 Hours (3 Days)",
+        168: "Last 7 Days"
+    }[x],
+    index=1  # Default to 24 hours
 )
 
 # =====================================
@@ -162,12 +181,29 @@ hours = st.sidebar.selectbox(
 # =====================================
 if st.sidebar.button("🔄 Refresh Analysis"):
     with st.spinner("Fetching recent Twitter data..."):
+        # Clear cache to force fresh data
+        scrape_kelantan_recent.clear()
         df_tweets = scrape_kelantan_recent(tweet_limit, hours)
 
     if df_tweets.empty:
         st.error("⚠️ Unable to fetch tweets at this moment.")
-        st.info("Please try again in a few moments or check your internet connection.")
-        st.stop()
+        st.info("**Troubleshooting:**\n- Nitter instances may be temporarily down\n- Try again in a few moments\n- Or use demo data below")
+        
+        # Provide demo/fallback data
+        if st.button("📊 Use Demo Data Instead"):
+            demo_tweets = [
+                {"date": datetime.now() - timedelta(hours=i), 
+                 "tweet": f"Demo tweet tentang Kelantan #{i}"}
+                for i in range(tweet_limit)
+            ]
+            df_tweets = pd.DataFrame(demo_tweets)
+            df_tweets["clean_text"] = df_tweets["tweet"].apply(clean_text)
+            df_tweets["sentiment"] = ["positive", "negative", "neutral"][0:len(df_tweets)] * (len(df_tweets)//3 + 1)
+            df_tweets = df_tweets.head(tweet_limit)
+        else:
+            st.stop()
+    else:
+        st.success(f"✅ Successfully fetched {len(df_tweets)} tweets!")
 
     # Sentiment Prediction
     df_tweets["clean_text"] = df_tweets["tweet"].apply(clean_text)
