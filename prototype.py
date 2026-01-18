@@ -224,17 +224,6 @@ data_source = st.sidebar.radio(
     index=1
 )
 
-# Get total count of Kelantan tweets in dataset
-@st.cache_data
-def get_total_kelantan_count():
-    df = pd.read_csv("prototaip.csv")
-    df = df.dropna(subset=["comment/tweet"])
-    df = df.rename(columns={"comment/tweet": "tweet"})
-    df["is_kelantan"] = df["tweet"].apply(is_kelantan_related)
-    return df["is_kelantan"].sum()
-
-total_kelantan = get_total_kelantan_count()
-
 if data_source == "Try Live Twitter":
     tweet_limit = st.sidebar.slider(
         "Number of Tweets",
@@ -254,15 +243,7 @@ if data_source == "Try Live Twitter":
         index=1
     )
 else:
-    st.sidebar.slider(
-        "Number of Tweets",
-        min_value=total_kelantan,
-        max_value=total_kelantan,
-        value=total_kelantan,
-        disabled=True,
-        help=f"Complete dataset contains {total_kelantan} Kelantan-related tweets"
-    )
-    st.sidebar.success(f"📊 Loading all {total_kelantan} Kelantan tweets")
+    st.sidebar.info("Using complete Kelantan dataset from CSV")
 
 # =====================================
 # 6. RUN ANALYSIS
