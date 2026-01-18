@@ -1,11 +1,11 @@
 import streamlit as st
 import pandas as pd
 import re
-from ntscraper import Nitter
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 import plotly.express as px
 from datetime import datetime, timedelta
+import snscrape.modules.twitter as sntwitter
 
 # =====================================
 # PAGE CONFIG (MUST BE FIRST)
@@ -29,27 +29,7 @@ def clean_text(text):
     return text.strip()
 
 # =====================================
-# 2. NITTER SCRAPER (STABLE)
-# =====================================
-@st.cache_resource
-def get_nitter_scraper():
-    return Nitter(
-        log_level=1,
-        skip_instance_check=False,
-        instances=[
-            "https://nitter.privacydev.net",
-            "https://nitter.poast.org",
-            "https://nitter.net",
-            "https://nitter.fdn.fr",
-            "https://nitter.unixfox.eu",
-            "https://nitter.it"
-        ]
-    )
-
-scraper = get_nitter_scraper()
-
-# =====================================
-# 3. LOAD DATASET & TRAIN MODEL
+# 2. LOAD DATASET & TRAIN MODEL
 # =====================================
 @st.cache_data
 def load_and_train():
@@ -74,87 +54,62 @@ def load_and_train():
 vectorizer, model = load_and_train()
 
 # =====================================
-# 4. SCRAPE KELANTAN TWEETS (NEAR REAL-TIME)
+# 3. SCRAPE KELANTAN TWEETS (SNSCRAPE)
 # =====================================
 @st.cache_data(ttl=1800)  # cache for 30 minutes
 def scrape_kelantan_recent(limit=50, hours=24):
     """
-    Fetch tweets from the last X hours (near real-time).
-    Falls back to broader search if time-filtered search fails.
+    Fetch tweets from the last X hours using snscrape.
     """
-    queries = [
-        "Kelantan",
-        "#Kelantan",
-        "orang kelantan",
-        "Kelantan Malaysia"
-    ]
+    since_date = (datetime.now() - timedelta(hours=hours)).strftime('%Y-%m-%d')
+    until_date = datetime.now().strftime('%Y-%m-%d')
     
-    all_tweets = []
+    # Query for Kelantan-related tweets
+    query = f"(Kelantan OR #Kelantan OR orang kelantan) lang:ms since:{since_date} until:{until_date}"
     
-    # Try each query
-    for query in queries:
-        try:
-            result = scraper.get_tweets(
-                query,
-                mode="term",
-                number=limit // len(queries) + 10,
-                language="ms"
-            )
+    tweets = []
+    
+    try:
+        # Scrape tweets using snscrape
+        for i, tweet in enumerate(sntwitter.TwitterSearchScraper(query).get_items()):
+            if i >= limit:
+                break
             
-            if result and result.get("tweets"):
-                for t in result.get("tweets", []):
-                    all_tweets.append({
-                        "date": t.get("date"),
-                        "tweet": t.get("text")
-                    })
-                
-                # If we got enough tweets, break
-                if len(all_tweets) >= limit:
-                    break
-        except Exception as e:
-            continue
+            tweets.append({
+                "date": tweet.date,
+                "tweet": tweet.rawContent
+            })
     
-    # If still no tweets, try without language filter
-    if len(all_tweets) < 10:
-        try:
-            result = scraper.get_tweets(
-                "Kelantan",
-                mode="term",
-                number=limit
-            )
-            
-            if result and result.get("tweets"):
-                for t in result.get("tweets", []):
-                    all_tweets.append({
-                        "date": t.get("date"),
-                        "tweet": t.get("text")
-                    })
-        except Exception:
-            pass
-    
-    if not all_tweets:
+    except Exception as e:
+        st.error(f"Error fetching tweets: {str(e)}")
         return pd.DataFrame()
     
-    df = pd.DataFrame(all_tweets)
+    if not tweets:
+        # Fallback: try without language filter
+        query_broad = f"(Kelantan OR #Kelantan) since:{since_date}"
+        try:
+            for i, tweet in enumerate(sntwitter.TwitterSearchScraper(query_broad).get_items()):
+                if i >= limit:
+                    break
+                
+                tweets.append({
+                    "date": tweet.date,
+                    "tweet": tweet.rawContent
+                })
+        except Exception:
+            return pd.DataFrame()
+    
+    df = pd.DataFrame(tweets)
     
     # Remove duplicates
-    df = df.drop_duplicates(subset=['tweet'])
-    
     if not df.empty:
-        df["date"] = pd.to_datetime(
-            df["date"].str.replace("·", "", regex=False),
-            errors="coerce"
-        )
-        
-        # Filter by time window if possible
-        if hours and not df["date"].isna().all():
-            cutoff = datetime.utcnow() - timedelta(hours=hours)
-            df = df[df["date"] >= cutoff]
+        df = df.drop_duplicates(subset=['tweet'])
+        df["date"] = pd.to_datetime(df["date"])
     
     return df.head(limit)
 
 # =====================================
-# 5. SIDEBAR CONTROLS
+# 4. SIDEBAR CONTROLS
 # =====================================
 st.sidebar.header("⚙️ Controls")
 
@@ -177,7 +132,7 @@ hours = st.sidebar.selectbox(
 )
 
 # =====================================
-# 6. RUN ANALYSIS
+# 5. RUN ANALYSIS
 # =====================================
 if st.sidebar.button("🔄 Refresh Analysis"):
     with st.spinner("Fetching recent Twitter data..."):
@@ -187,23 +142,10 @@ if st.sidebar.button("🔄 Refresh Analysis"):
 
     if df_tweets.empty:
         st.error("⚠️ Unable to fetch tweets at this moment.")
-        st.info("**Troubleshooting:**\n- Nitter instances may be temporarily down\n- Try again in a few moments\n- Or use demo data below")
-        
-        # Provide demo/fallback data
-        if st.button("📊 Use Demo Data Instead"):
-            demo_tweets = [
-                {"date": datetime.now() - timedelta(hours=i), 
-                 "tweet": f"Demo tweet tentang Kelantan #{i}"}
-                for i in range(tweet_limit)
-            ]
-            df_tweets = pd.DataFrame(demo_tweets)
-            df_tweets["clean_text"] = df_tweets["tweet"].apply(clean_text)
-            df_tweets["sentiment"] = ["positive", "negative", "neutral"][0:len(df_tweets)] * (len(df_tweets)//3 + 1)
-            df_tweets = df_tweets.head(tweet_limit)
-        else:
-            st.stop()
-    else:
-        st.success(f"✅ Successfully fetched {len(df_tweets)} tweets!")
+        st.info("**Possible reasons:**\n- No tweets found in the selected time window\n- Twitter rate limits\n- Network connection issues\n\nTry selecting a longer time window (e.g., Last 7 Days)")
+        st.stop()
+    
+    st.success(f"✅ Successfully fetched {len(df_tweets)} tweets!")
 
     # Sentiment Prediction
     df_tweets["clean_text"] = df_tweets["tweet"].apply(clean_text)
