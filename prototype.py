@@ -5,9 +5,6 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 import plotly.express as px
 from datetime import datetime, timedelta
-import requests
-from bs4 import BeautifulSoup
-import time
 
 # =====================================
 # PAGE CONFIG (MUST BE FIRST)
@@ -129,101 +126,12 @@ def load_and_train():
 vectorizer, model = load_and_train()
 
 # =====================================
-# 3. TWITTER SCRAPER (Multiple Methods)
-# =====================================
-@st.cache_data(ttl=1800)  # cache for 30 minutes
-def scrape_kelantan_recent(limit=50, hours=24):
-    """
-    Fetch tweets using multiple Nitter instances with better error handling.
-    """
-    nitter_instances = [
-        "https://nitter.privacydev.net",
-        "https://nitter.poast.org",
-        "https://nitter.net",
-        "https://nitter.fdn.fr",
-        "https://nitter.unixfox.eu",
-        "https://nitter.it",
-        "https://nitter.1d4.us",
-        "https://nitter.kavin.rocks"
-    ]
-    
-    queries = [
-        "Kelantan",
-        "kelantan",
-        "#Kelantan"
-    ]
-    
-    all_tweets = []
-    
-    for instance in nitter_instances:
-        if len(all_tweets) >= limit:
-            break
-            
-        for query in queries:
-            if len(all_tweets) >= limit:
-                break
-                
-            try:
-                url = f"{instance}/search?f=tweets&q={query}&since=&until=&near="
-                
-                headers = {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-                }
-                
-                response = requests.get(url, headers=headers, timeout=10)
-                
-                if response.status_code == 200:
-                    soup = BeautifulSoup(response.content, 'html.parser')
-                    
-                    # Find tweet containers
-                    tweets = soup.find_all('div', class_='timeline-item')
-                    
-                    for tweet in tweets[:limit]:
-                        try:
-                            # Extract tweet text
-                            tweet_text_elem = tweet.find('div', class_='tweet-content')
-                            if tweet_text_elem:
-                                tweet_text = tweet_text_elem.get_text(strip=True)
-                                
-                                # Extract date
-                                date_elem = tweet.find('span', class_='tweet-date')
-                                tweet_date = datetime.now() - timedelta(hours=hours/2)  # Approximate
-                                
-                                if tweet_text and len(tweet_text) > 10:
-                                    all_tweets.append({
-                                        "date": tweet_date,
-                                        "tweet": tweet_text
-                                    })
-                        except Exception:
-                            continue
-                
-                time.sleep(0.5)  # Rate limiting
-                
-            except Exception:
-                continue
-    
-    if not all_tweets:
-        return pd.DataFrame()
-    
-    df = pd.DataFrame(all_tweets)
-    
-    # Remove duplicates
-    df = df.drop_duplicates(subset=['tweet'])
-    
-    # Filter to get recent tweets within time window
-    if not df.empty:
-        cutoff = datetime.now() - timedelta(hours=hours)
-        df = df[df["date"] >= cutoff]
-    
-    return df.head(limit)
-
-# =====================================
-# 4. ALTERNATIVE: USE YOUR CSV DATA
+# 3. LOAD KELANTAN TWEETS FROM CSV
 # =====================================
 @st.cache_data
-def load_recent_from_csv(hours=8760):
+def load_kelantan_tweets(hours=8760):
     """
-    Fallback: Use your existing CSV data as 'recent' tweets
+    Load Kelantan-related tweets from CSV dataset
     Simulates data from the last X hours (default: 1 year)
     """
     df = pd.read_csv("prototaip.csv")
@@ -250,19 +158,13 @@ def load_recent_from_csv(hours=8760):
     return df_sample[["date", "tweet"]]
 
 # =====================================
-# 5. SIDEBAR CONTROLS
+# 4. SIDEBAR CONTROLS
 # =====================================
 st.sidebar.header("⚙️ Controls")
 
-data_source = st.sidebar.radio(
-    "Data Source",
-    ["Try Live Twitter", "Use Training Data (Reliable)"],
-    index=1
-)
-
 tweet_limit = st.sidebar.slider(
-    "Number of Tweets",
-    20, 100, 50
+    "Number of Tweets to Analyze",
+    20, 200, 100
 )
 
 hours = st.sidebar.selectbox(
@@ -281,20 +183,11 @@ hours = st.sidebar.selectbox(
 )
 
 # =====================================
-# 6. RUN ANALYSIS
+# 5. RUN ANALYSIS
 # =====================================
 if st.sidebar.button("🔄 Refresh Analysis"):
-    with st.spinner("Fetching data..."):
-        
-        if data_source == "Try Live Twitter":
-            scrape_kelantan_recent.clear()
-            df_tweets = scrape_kelantan_recent(tweet_limit, hours)
-            
-            if df_tweets.empty:
-                st.warning("⚠️ Live Twitter data unavailable. Switching to training data...")
-                df_tweets = load_recent_from_csv(hours).head(tweet_limit)
-        else:
-            df_tweets = load_recent_from_csv(hours).head(tweet_limit)
+    with st.spinner("Loading Kelantan tweet data..."):
+        df_tweets = load_kelantan_tweets(hours).head(tweet_limit)
 
     if df_tweets.empty:
         st.error("No data available.")
@@ -441,19 +334,33 @@ if st.sidebar.button("🔄 Refresh Analysis"):
         st.metric("Negative", f"{negative_pct:.1f}%")
 
 else:
-    st.info("👆 Click **Refresh Analysis** to start")
+    st.info("👆 Click **Refresh Analysis** to start analyzing Kelantan sentiment data")
     
     with st.expander("ℹ️ About This Dashboard"):
         st.markdown("""
-        **Data Source Options:**
+        **Kelantan Sentiment Analysis Dashboard**
         
-        1. **Try Live Twitter**: Attempts to fetch real-time tweets (may be unreliable due to rate limits)
-        2. **Use Training Data (Reliable)**: Uses your labeled dataset as recent data (recommended for demos)
+        This system analyzes sentiment from Kelantan-related social media data using:
+        
+        **Data Source:**
+        - Pre-collected Twitter/social media data about Kelantan
+        - Labeled dataset with sentiment annotations
+        - Time-windowed analysis (from 12 hours to 1 year)
         
         **Kelantan Validation:**
-        - System automatically filters tweets to ensure they're Kelantan-related
-        - Checks for keywords like: Kelantan, Kelate, Kota Bharu, Tumpat, Nasi Kerabu, etc.
-        - Shows "Kelantan Keywords Found" column to verify relevance
+        - Automatically filters tweets to ensure Kelantan relevance
+        - Checks for 70+ Kelantan-specific keywords including:
+          - **Places**: Kelantan, Kota Bharu, Tumpat, Gua Musang, etc.
+          - **Food**: Nasi Kerabu, Nasi Dagang, Budu, Laksam, etc.
+          - **Dialect**: Kelate, Orang Kelate, Gapo, Mung, Kito, etc.
+          - **Landmarks**: Pantai Cahaya Bulan, Pasar Siti Khadijah, etc.
+        - Shows "Kelantan Keywords Found" for verification
         
-        **Note:** This system uses a near real-time approach, analyzing tweets from the selected time window.
+        **Sentiment Analysis:**
+        - Uses Machine Learning (Naive Bayes) trained on labeled data
+        - Classifies tweets as: Positive, Negative, or Neutral
+        - Visualizes trends over time
+        
+        **Time Windows Available:**
+        - 12 Hours, 1 Day, 2 Days, 3 Days, 1 Week, 1 Month, 1 Year
         """)
