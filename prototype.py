@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import re
-from seacrowd.loaders import MalaysiaTweets
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 import plotly.express as px
@@ -16,7 +15,7 @@ st.set_page_config(
 )
 
 st.title("📊 Kelantan Social Unity Sentiment Analysis")
-st.caption("Dataset: SEACrowd Malaysia Tweets (official loader)")
+st.caption("Dataset: SEACrowd Malaysia Tweets (script-free Parquet)")
 
 # =====================================
 # TEXT CLEANING
@@ -50,24 +49,33 @@ def is_kelantan_related(text):
     return any(k in text for k in KELANTAN_KEYWORDS)
 
 # =====================================
-# LOAD SEACROWD DATASET & TRAIN MODEL
+# LOAD DATASET (SCRIPT-FREE)
 # =====================================
 @st.cache_data(show_spinner=True)
-def load_and_train():
-    loader = MalaysiaTweets()
-    records = []
+def load_dataset_parquet():
+    url = (
+        "https://huggingface.co/datasets/SEACrowd/malaysia_tweets/"
+        "resolve/main/data/train-00000-of-00001.parquet"
+    )
 
-    for sample in loader:
-        if sample.text is not None and sample.label is not None:
-            records.append({
-                "text": sample.text,
-                "label": sample.label
-            })
+    df = pd.read_parquet(url)
 
-    df = pd.DataFrame(records)
+    # Standardize column names
+    df = df.rename(columns={
+        "text": "text",
+        "label": "label"
+    })
 
+    df = df.dropna(subset=["text", "label"])
     df["clean_text"] = df["text"].apply(clean_text)
 
+    return df
+
+# =====================================
+# TRAIN MODEL
+# =====================================
+@st.cache_data(show_spinner=True)
+def train_model(df):
     vectorizer = TfidfVectorizer(
         max_features=5000,
         ngram_range=(1, 2)
@@ -79,12 +87,12 @@ def load_and_train():
     model = MultinomialNB()
     model.fit(X, y)
 
-    return df, vectorizer, model
+    return vectorizer, model
 
-with st.spinner("Loading SEACrowd dataset & training sentiment model..."):
-    df_all, vectorizer, model = load_and_train()
+with st.spinner("Loading SEACrowd dataset & training model..."):
+    df_all = load_dataset_parquet()
+    vectorizer, model = train_model(df_all)
 
-# Label mapping (SEACrowd standard)
 LABEL_MAP = {
     0: "Negative",
     1: "Neutral",
@@ -92,20 +100,15 @@ LABEL_MAP = {
 }
 
 # =====================================
-# SIDEBAR CONTROLS
+# SIDEBAR
 # =====================================
-st.sidebar.header("⚙️ Analysis Controls")
+st.sidebar.header("⚙️ Controls")
 
-tweet_limit = st.sidebar.slider(
-    "Number of Tweets",
-    min_value=50,
-    max_value=500,
-    value=200
-)
+tweet_limit = st.sidebar.slider("Number of Tweets", 50, 500, 200)
 
 time_window = st.sidebar.selectbox(
     "Time Window",
-    options=[12, 24, 48, 72, 168],
+    [12, 24, 48, 72, 168],
     format_func=lambda x: {
         12: "Last 12 Hours",
         24: "Last 24 Hours",
@@ -120,103 +123,63 @@ time_window = st.sidebar.selectbox(
 # =====================================
 if st.sidebar.button("🔄 Run Analysis"):
 
-    df = df_all.copy()
-
-    # Filter Kelantan-related tweets
-    df = df[df["text"].apply(is_kelantan_related)]
+    df = df_all[df_all["text"].apply(is_kelantan_related)]
 
     if df.empty:
-        st.warning("⚠️ No Kelantan-related tweets found.")
+        st.warning("No Kelantan-related tweets found.")
         st.stop()
 
-    # Limit tweets
     df = df.head(tweet_limit)
 
-    # Simulated short-term timestamps (academic-safe)
     df["date"] = pd.date_range(
         end=datetime.now(),
         periods=len(df),
         freq="H"
     )
 
-    # Predict sentiment
-    df["predicted"] = model.predict(
+    df["sentiment"] = model.predict(
         vectorizer.transform(df["clean_text"])
     )
-    df["sentiment"] = df["predicted"].map(LABEL_MAP)
+    df["sentiment"] = df["sentiment"].map(LABEL_MAP)
 
-    # =====================================
     # METRICS
-    # =====================================
     col1, col2, col3 = st.columns(3)
+    col1.metric("Total Tweets", len(df))
+    col2.metric("Positive (%)", f"{(df['sentiment']=='Positive').mean()*100:.1f}")
+    col3.metric("Negative (%)", f"{(df['sentiment']=='Negative').mean()*100:.1f}")
 
-    with col1:
-        st.metric("Total Tweets", len(df))
-    with col2:
-        st.metric("Positive",
-                  f"{(df['sentiment']=='Positive').mean()*100:.1f}%")
-    with col3:
-        st.metric("Negative",
-                  f"{(df['sentiment']=='Negative').mean()*100:.1f}%")
-
-    # =====================================
     # TABLE
-    # =====================================
-    st.subheader("📋 Kelantan Tweet Sentiment")
-    st.dataframe(
-        df[["date", "text", "sentiment"]],
-        use_container_width=True
-    )
+    st.subheader("📋 Kelantan Tweets")
+    st.dataframe(df[["date", "text", "sentiment"]], use_container_width=True)
 
-    # =====================================
-    # PIE CHART
-    # =====================================
+    # PIE
     st.subheader("📊 Sentiment Distribution")
-    fig_pie = px.pie(
-        df,
-        names="sentiment",
-        hole=0.4
-    )
+    fig_pie = px.pie(df, names="sentiment", hole=0.4)
     st.plotly_chart(fig_pie, use_container_width=True)
 
-    # =====================================
-    # TREND ANALYSIS
-    # =====================================
+    # TREND
     st.subheader("📈 Sentiment Trend")
-
-    if time_window <= 48:
-        df["time_group"] = df["date"].dt.floor("H")
-    else:
-        df["time_group"] = df["date"].dt.floor("D")
-
-    trend = (
-        df.groupby(["time_group", "sentiment"])
-        .size()
-        .reset_index(name="count")
+    df["time_group"] = (
+        df["date"].dt.floor("H") if time_window <= 48
+        else df["date"].dt.floor("D")
     )
 
-    fig_trend = px.line(
-        trend,
-        x="time_group",
-        y="count",
-        color="sentiment",
-        markers=True
-    )
+    trend = df.groupby(["time_group", "sentiment"]).size().reset_index(name="count")
+    fig_trend = px.line(trend, x="time_group", y="count", color="sentiment", markers=True)
     st.plotly_chart(fig_trend, use_container_width=True)
 
 else:
     st.info("👈 Click **Run Analysis** to start")
 
-    with st.expander("ℹ️ About This System"):
+    with st.expander("ℹ️ About"):
         st.markdown("""
-**Kelantan Social Unity Sentiment Analysis Dashboard**
+**Kelantan Social Unity Sentiment Analysis**
 
-• Dataset: **SEACrowd Malaysia Tweets (official loader)**  
-• Approach: **Supervised Machine Learning**  
-• Model: **TF-IDF + Multinomial Naive Bayes**  
-• Focus: **Kelantan-related social sentiment**  
-• Time Window: **Short-term (12 hours – 7 days)**  
+• Dataset: **SEACrowd Malaysia Tweets (Parquet, script-free)**  
+• Model: **TF-IDF + Naive Bayes**  
+• Analysis: **Short-term sentiment trends (12h–7d)**  
+• Method: **Keyword-based Kelantan filtering**
 
-This system avoids dataset scripts and local files by using the official
-SEACrowd Python loader, ensuring stability and academic reproducibility.
+This approach avoids dataset scripts and deprecated APIs while maintaining
+full academic reproducibility.
 """)
