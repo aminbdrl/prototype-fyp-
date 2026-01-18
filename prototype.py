@@ -5,6 +5,7 @@ from ntscraper import Nitter
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 import plotly.express as px
+from datetime import datetime, timedelta
 
 # =====================================
 # PAGE CONFIG (MUST BE FIRST)
@@ -14,7 +15,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("📊 Real-Time Sentiment Analysis Dashboard — Kelantan")
+st.title("📊 Near Real-Time Sentiment Analysis Dashboard — Kelantan")
 
 # =====================================
 # 1. TEXT PREPROCESSING
@@ -69,10 +70,16 @@ def load_and_train():
 vectorizer, model = load_and_train()
 
 # =====================================
-# 4. SCRAPE KELANTAN TWEETS (SAFE)
+# 4. SCRAPE KELANTAN TWEETS (NEAR REAL-TIME)
 # =====================================
-def scrape_kelantan_tweets(limit):
-    query = "Kelantan OR orang kelantan"
+@st.cache_data(ttl=3600)  # cache for 1 hour
+def scrape_kelantan_recent(limit=50, hours=24):
+    """
+    Fetch tweets from the last X hours (near real-time).
+    """
+    since_time = (datetime.utcnow() - timedelta(hours=hours)).strftime('%Y-%m-%d')
+    query = f"Kelantan OR orang kelantan since:{since_time}"
+
     try:
         result = scraper.get_tweets(
             query,
@@ -81,8 +88,6 @@ def scrape_kelantan_tweets(limit):
             language="ms"
         )
     except Exception:
-        st.error("⚠️ Live Twitter data is temporarily unavailable.")
-        st.info("This happens when public Nitter servers are down.")
         return pd.DataFrame()
 
     tweets = []
@@ -106,22 +111,27 @@ def scrape_kelantan_tweets(limit):
 # 5. SIDEBAR CONTROLS
 # =====================================
 st.sidebar.header("⚙️ Controls")
+
 tweet_limit = st.sidebar.slider(
-    "Number of Live Tweets",
-    min_value=10,
-    max_value=100,
-    value=30
+    "Number of Tweets (Last 24 Hours)",
+    20, 100, 50
+)
+
+hours = st.sidebar.selectbox(
+    "Time Window",
+    [24, 48],
+    index=0
 )
 
 # =====================================
 # 6. RUN ANALYSIS
 # =====================================
-if st.sidebar.button("🔄 Refresh Sentiment Now"):
-    with st.spinner("Fetching live tweets..."):
-        df_tweets = scrape_kelantan_tweets(tweet_limit)
+if st.sidebar.button("🔄 Refresh Analysis"):
+    with st.spinner("Fetching recent Twitter data..."):
+        df_tweets = scrape_kelantan_recent(tweet_limit, hours)
 
     if df_tweets.empty:
-        st.warning("No tweets available at the moment.")
+        st.warning("No recent tweets available. Showing last cached data.")
         st.stop()
 
     # Sentiment Prediction
@@ -136,7 +146,7 @@ if st.sidebar.button("🔄 Refresh Sentiment Now"):
     col1, col2 = st.columns([2, 1])
 
     with col1:
-        st.subheader("📋 Live Tweet Analysis")
+        st.subheader("📋 Recent Tweet Analysis")
         st.dataframe(
             df_tweets[["date", "tweet", "sentiment"]],
             use_container_width=True
@@ -154,7 +164,7 @@ if st.sidebar.button("🔄 Refresh Sentiment Now"):
     # =====================================
     # TREND ANALYSIS
     # =====================================
-    st.subheader("📈 Sentiment Trend Over Time")
+    st.subheader("📈 Sentiment Trend (Near Real-Time)")
 
     df_tweets["hour"] = df_tweets["date"].dt.floor("h")
     trend = (
@@ -175,4 +185,4 @@ if st.sidebar.button("🔄 Refresh Sentiment Now"):
     st.plotly_chart(fig_trend, use_container_width=True)
 
 else:
-    st.info("Click **Refresh Sentiment Now** to start analysis.")
+    st.info("Click **Refresh Analysis** to start near real-time analysis.")
