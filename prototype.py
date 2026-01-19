@@ -9,9 +9,9 @@ import requests
 from bs4 import BeautifulSoup
 import time
 
-# =====================================
+# ==================================================
 # PAGE CONFIG (MUST BE FIRST)
-# =====================================
+# ==================================================
 st.set_page_config(
     page_title="Kelantan Social Sentiment Dashboard",
     layout="wide"
@@ -19,9 +19,9 @@ st.set_page_config(
 
 st.title("Sentiment Analysis Dashboard — Kelantan")
 
-# =====================================
+# ==================================================
 # 1. TEXT PREPROCESSING
-# =====================================
+# ==================================================
 def clean_text(text):
     if not isinstance(text, str):
         return ""
@@ -34,29 +34,30 @@ def is_kelantan_related(text):
     if not isinstance(text, str):
         return False
 
-    kelantan_keywords = [
-        'kelantan', 'kelate', 'kota bharu', 'kb',
-        'tumpat', 'pasir mas', 'tanah merah', 'machang',
-        'kuala krai', 'gua musang', 'pasir puteh', 'bachok',
-        'jeli', 'rantau panjang', 'nasi kerabu', 'nasi dagang',
-        'orang kelate', 'oghe kelate'
+    keywords = [
+        "kelantan", "kelate", "kota bharu", "kb",
+        "tumpat", "pasir mas", "tanah merah",
+        "kuala krai", "gua musang", "bachok",
+        "nasi kerabu", "nasi dagang",
+        "orang kelate", "oghe kelate"
     ]
-    return any(k in text.lower() for k in kelantan_keywords)
+    return any(k in text.lower() for k in keywords)
 
 def get_kelantan_keywords_found(text):
     if not isinstance(text, str):
         return []
     keywords = [
-        'kelantan', 'kelate', 'kota bharu', 'kb',
-        'tumpat', 'pasir mas', 'tanah merah', 'machang',
-        'kuala krai', 'gua musang', 'pasir puteh', 'bachok',
-        'nasi kerabu', 'nasi dagang', 'orang kelate', 'oghe kelate'
+        "kelantan", "kelate", "kota bharu", "kb",
+        "tumpat", "pasir mas", "tanah merah",
+        "kuala krai", "gua musang", "bachok",
+        "nasi kerabu", "nasi dagang",
+        "orang kelate", "oghe kelate"
     ]
     return [k for k in keywords if k in text.lower()]
 
-# =====================================
-# 2. LOAD DATA & TRAIN MODEL
-# =====================================
+# ==================================================
+# 2. LOAD DATASET & TRAIN MODEL
+# ==================================================
 @st.cache_data
 def load_and_train():
     df = pd.read_csv("kelantan_extended.csv")
@@ -70,7 +71,7 @@ def load_and_train():
     )
 
     X = vectorizer.fit_transform(df["clean_text"])
-    y = df["majority_sent"]
+    y = df["majority_sent"].str.lower().str.strip()
 
     model = MultinomialNB()
     model.fit(X, y)
@@ -79,43 +80,9 @@ def load_and_train():
 
 vectorizer, model = load_and_train()
 
-# =====================================
-# 3. TWITTER SCRAPER (NITTER)
-# =====================================
-@st.cache_data(ttl=1800)
-def scrape_kelantan_recent(limit=100, hours=24):
-    instances = [
-        "https://nitter.net",
-        "https://nitter.fdn.fr",
-        "https://nitter.poast.org"
-    ]
-
-    tweets_data = []
-
-    for site in instances:
-        try:
-            url = f"{site}/search?f=tweets&q=kelantan"
-            response = requests.get(url, timeout=10)
-            soup = BeautifulSoup(response.content, "html.parser")
-
-            tweets = soup.find_all("div", class_="timeline-item")
-
-            for t in tweets[:limit]:
-                content = t.find("div", class_="tweet-content")
-                if content:
-                    tweets_data.append({
-                        "date": datetime.now(),
-                        "tweet": content.text.strip()
-                    })
-        except:
-            continue
-
-    df = pd.DataFrame(tweets_data).drop_duplicates("tweet")
-    return df.head(limit)
-
-# =====================================
-# 4. LOAD COMPLETE DATASET
-# =====================================
+# ==================================================
+# 3. LOAD COMPLETE KELANTAN DATASET
+# ==================================================
 @st.cache_data
 def load_all_kelantan_data():
     df = pd.read_csv("kelantan_extended.csv")
@@ -132,58 +99,37 @@ def load_all_kelantan_data():
 
     return df[["date", "tweet"]].reset_index(drop=True)
 
-# =====================================
-# 5. SIDEBAR CONTROLS
-# =====================================
+# ==================================================
+# 4. SIDEBAR
+# ==================================================
 st.sidebar.header("⚙️ Controls")
 
-data_source = st.sidebar.radio(
-    "Data Source",
-    ["Use Complete Kelantan Dataset", "Try Live Twitter"],
-    index=0
-)
-
-if data_source == "Try Live Twitter":
-    tweet_limit = st.sidebar.slider("Number of Tweets", 20, 200, 100)
-    hours = st.sidebar.selectbox(
-        "Time Window",
-        [12, 24, 48, 72, 168],
-        index=1
-    )
-
-# =====================================
-# 6. RUN ANALYSIS
-# =====================================
 if st.sidebar.button("🔄 Refresh Analysis"):
-    with st.spinner("Processing data..."):
-
-        if data_source == "Try Live Twitter":
-            scrape_kelantan_recent.clear()
-            df_tweets = scrape_kelantan_recent(tweet_limit, hours)
-            df_tweets = df_tweets[df_tweets["tweet"].apply(is_kelantan_related)]
-        else:
-            df_tweets = load_all_kelantan_data()
+    df_tweets = load_all_kelantan_data()
 
     if df_tweets.empty:
-        st.error("No Kelantan-related data found.")
+        st.error("No Kelantan-related tweets found.")
         st.stop()
 
-    st.success(f"Analyzing {len(df_tweets)} tweets")
-
-    df_tweets["kelantan_keywords"] = df_tweets["tweet"].apply(get_kelantan_keywords_found)
+    # ==================================================
+    # 5. SENTIMENT PREDICTION
+    # ==================================================
     df_tweets["clean_text"] = df_tweets["tweet"].apply(clean_text)
-
     df_tweets["sentiment"] = model.predict(
         vectorizer.transform(df_tweets["clean_text"])
     )
 
-    # =====================================
+    df_tweets["sentiment"] = df_tweets["sentiment"].str.lower().str.strip()
+    df_tweets["kelantan_keywords"] = df_tweets["tweet"].apply(get_kelantan_keywords_found)
+
+    # ==================================================
     # DISPLAY TABLE
-    # =====================================
+    # ==================================================
     col1, col2 = st.columns([2, 1])
 
     with col1:
-        st.subheader("📋 Tweet Analysis")
+        st.subheader("📋 Kelantan Tweet Analysis")
+
         df_show = df_tweets.copy()
         df_show["kelantan_keywords"] = df_show["kelantan_keywords"].apply(
             lambda x: ", ".join(x)
@@ -192,33 +138,35 @@ if st.sidebar.button("🔄 Refresh Analysis"):
         st.dataframe(
             df_show[["date", "tweet", "sentiment", "kelantan_keywords"]],
             use_container_width=True,
-            height=400
+            height=420
         )
 
-    # =====================================
-    # SENTIMENT DISTRIBUTION (FIXED COLORS)
-    # =====================================
+    # ==================================================
+    # SENTIMENT DISTRIBUTION (COLOUR FIXED)
+    # ==================================================
     with col2:
         st.subheader("📊 Sentiment Distribution")
 
-        sentiment_counts = df_tweets["sentiment"].value_counts()
-
         fig_pie = px.pie(
-            values=sentiment_counts.values,
-            names=sentiment_counts.index,
-            hole=0.4,
+            df_tweets,
+            names="sentiment",
+            hole=0.45,
+            category_orders={
+                "sentiment": ["positive", "neutral", "negative"]
+            },
+            color="sentiment",
             color_discrete_map={
-                "negative": "#ff0000",  # RED
+                "positive": "#1f77b4",  # BLUE
                 "neutral": "#00cc66",   # GREEN
-                "positive": "#1f77b4"   # BLUE
+                "negative": "#ff0000"   # RED
             }
         )
 
         st.plotly_chart(fig_pie, use_container_width=True)
 
-    # =====================================
-    # TREND ANALYSIS
-    # =====================================
+    # ==================================================
+    # TREND ANALYSIS (SAME COLOURS)
+    # ==================================================
     st.subheader("📈 Sentiment Trend Over Time")
 
     df_tweets["hour"] = df_tweets["date"].dt.floor("h")
@@ -236,14 +184,45 @@ if st.sidebar.button("🔄 Refresh Analysis"):
         y="count",
         color="sentiment",
         markers=True,
+        category_orders={
+            "sentiment": ["positive", "neutral", "negative"]
+        },
         color_discrete_map={
-            "negative": "#ff0000",
+            "positive": "#1f77b4",
             "neutral": "#00cc66",
-            "positive": "#1f77b4"
+            "negative": "#ff0000"
         }
     )
 
     st.plotly_chart(fig_trend, use_container_width=True)
+
+    # ==================================================
+    # SUMMARY METRICS
+    # ==================================================
+    st.subheader("📊 Summary Statistics")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric("Total Tweets", len(df_tweets))
+
+    with col2:
+        st.metric(
+            "Positive (%)",
+            f"{(df_tweets.sentiment == 'positive').mean() * 100:.1f}%"
+        )
+
+    with col3:
+        st.metric(
+            "Neutral (%)",
+            f"{(df_tweets.sentiment == 'neutral').mean() * 100:.1f}%"
+        )
+
+    with col4:
+        st.metric(
+            "Negative (%)",
+            f"{(df_tweets.sentiment == 'negative').mean() * 100:.1f}%"
+        )
 
 else:
     st.info("👈 Click **Refresh Analysis** to start")
