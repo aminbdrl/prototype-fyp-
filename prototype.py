@@ -17,7 +17,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("Sentiment Analysis Dashboard — Kelantan")
+st.title("📊 Near Real-Time Sentiment Analysis Dashboard — Kelantan")
 
 # =====================================
 # 1. TEXT PREPROCESSING & VALIDATION
@@ -78,7 +78,7 @@ def get_kelantan_keywords_found(text):
 # =====================================
 @st.cache_data
 def load_and_train():
-    df = pd.read_csv("kelantan_extended.csv")
+    df = pd.read_csv("prototaip.csv")
 
     df = df.dropna(subset=["comment/tweet", "majority_sent"])
     df["clean_text"] = df["comment/tweet"].apply(clean_text)
@@ -195,7 +195,7 @@ def load_all_kelantan_data():
     """
     Load complete dataset and filter for Kelantan-related content only
     """
-    df = pd.read_csv("kelantan_extended.csv")
+    df = pd.read_csv("prototaip.csv")
     df = df.dropna(subset=["comment/tweet"])
     
     # Simulate recent dates across the entire dataset
@@ -224,6 +224,17 @@ data_source = st.sidebar.radio(
     index=1
 )
 
+# Get total count of Kelantan tweets in dataset
+@st.cache_data
+def get_total_kelantan_count():
+    df = pd.read_csv("prototaip.csv")
+    df = df.dropna(subset=["comment/tweet"])
+    df = df.rename(columns={"comment/tweet": "tweet"})
+    df["is_kelantan"] = df["tweet"].apply(is_kelantan_related)
+    return df["is_kelantan"].sum()
+
+total_kelantan = get_total_kelantan_count()
+
 if data_source == "Try Live Twitter":
     tweet_limit = st.sidebar.slider(
         "Number of Tweets",
@@ -243,7 +254,15 @@ if data_source == "Try Live Twitter":
         index=1
     )
 else:
-    st.sidebar.info("Using complete Kelantan dataset from CSV")
+    st.sidebar.slider(
+        "Number of Tweets",
+        min_value=total_kelantan,
+        max_value=total_kelantan,
+        value=total_kelantan,
+        disabled=True,
+        help=f"Complete dataset contains {total_kelantan} Kelantan-related tweets"
+    )
+    st.sidebar.success(f"📊 Loading all {total_kelantan} Kelantan tweets")
 
 # =====================================
 # 6. RUN ANALYSIS
