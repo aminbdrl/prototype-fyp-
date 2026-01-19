@@ -311,16 +311,16 @@ if st.sidebar.button("🔄 Refresh Analysis"):
         
         sentiment_counts = df_tweets["sentiment"].value_counts()
         
-        fig_pie = px.pie(
-            values=sentiment_counts.values,
-            names=sentiment_counts.index,
-            hole=0.4,
-            color_discrete_map={
-                'positive': '#00cc66',
-                'negative': '#ff444',
-                'neutral': '#ffaa00'
-            }
-        )
+fig_pie = px.pie(
+    values=sentiment_counts.values,
+    names=sentiment_counts.index,
+    hole=0.4,
+    color_discrete_map={
+        'positive': '#1f77b4',   # blue (optional, change if you want)
+        'negative': '#ff0000',   # red
+        'neutral': '#00cc66'     # green
+    }
+)
         st.plotly_chart(fig_pie, use_container_width=True)
 
     # =====================================
