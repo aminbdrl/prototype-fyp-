@@ -213,15 +213,6 @@ def load_all_kelantan_data():
     
     return df_kelantan[["date", "tweet"]].reset_index(drop=True)
 
-# Get total count of Kelantan tweets in dataset
-@st.cache_data
-def get_total_kelantan_count():
-    df = pd.read_csv("kelantan_extended.csv")
-    df = df.dropna(subset=["comment/tweet"])
-    df = df.rename(columns={"comment/tweet": "tweet"})
-    df["is_kelantan"] = df["tweet"].apply(is_kelantan_related)
-    return df["is_kelantan"].sum()
-
 # =====================================
 # 5. SIDEBAR CONTROLS
 # =====================================
@@ -232,8 +223,6 @@ data_source = st.sidebar.radio(
     ["Try Live Twitter", "Use Complete Kelantan Dataset"],
     index=1
 )
-
-total_kelantan = get_total_kelantan_count()
 
 if data_source == "Try Live Twitter":
     tweet_limit = st.sidebar.slider(
@@ -254,15 +243,7 @@ if data_source == "Try Live Twitter":
         index=1
     )
 else:
-    st.sidebar.slider(
-        "Number of Tweets",
-        min_value=total_kelantan,
-        max_value=total_kelantan,
-        value=total_kelantan,
-        disabled=True,
-        help=f"Complete dataset contains {total_kelantan} Kelantan-related tweets"
-    )
-    st.sidebar.success(f"📊 Loading all {total_kelantan} Kelantan tweets")
+    st.sidebar.info("Using complete Kelantan dataset from CSV")
 
 # =====================================
 # 6. RUN ANALYSIS
@@ -336,8 +317,8 @@ if st.sidebar.button("🔄 Refresh Analysis"):
             hole=0.4,
             color_discrete_map={
                 'positive': '#00cc66',
-                'negative': '#ff0000',
-                'neutral': '#87CEEB'
+                'negative': '#ff444',
+                'neutral': '#ffaa00'
             }
         )
         st.plotly_chart(fig_pie, use_container_width=True)
@@ -363,8 +344,8 @@ if st.sidebar.button("🔄 Refresh Analysis"):
         markers=True,
         color_discrete_map={
             'positive': '#00cc66',
-            'negative': '#ff0000',
-            'neutral': '#87CEEB'
+            'negative': '#ff4444',
+            'neutral': '#ffaa00'
         }
     )
     
