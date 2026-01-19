@@ -195,7 +195,7 @@ def load_all_kelantan_data():
     """
     Load complete dataset and filter for Kelantan-related content only
     """
-    df = pd.read_csv("prototaip.csv")
+    df = pd.read_csv("kelantan_extended.csv")
     df = df.dropna(subset=["comment/tweet"])
     
     # Simulate recent dates across the entire dataset
@@ -317,8 +317,8 @@ if st.sidebar.button("🔄 Refresh Analysis"):
             hole=0.4,
             color_discrete_map={
                 'positive': '#00cc66',
-                'negative': '#ff4444',
-                'neutral': '#ffaa00'
+                'negative': '#ffaa00',
+                'neutral': '#ff4444'
             }
         )
         st.plotly_chart(fig_pie, use_container_width=True)
