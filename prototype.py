@@ -73,7 +73,7 @@ def get_kelantan_keywords_found(text):
 @st.cache_data
 def load_and_train():
     # Using the customized dataset we generated
-    df = pd.read_csv("final_kelantan_customized_dataset.csv")
+    df = pd.read_csv("kelantan_extended.csv")
 
     df = df.dropna(subset=["comment/tweet", "majority_sent"])
     df["clean_text"] = df["comment/tweet"].apply(clean_text)
