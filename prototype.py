@@ -254,7 +254,7 @@ if data_source == "Try Live Twitter":
         index=1
     )
 else:
-    st.sidebar.slider(
+     st.sidebar.slider(
         "Number of Tweets",
         min_value=total_kelantan,
         max_value=total_kelantan,
