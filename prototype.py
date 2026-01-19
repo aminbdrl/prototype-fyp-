@@ -17,7 +17,7 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("📊 Near Real-Time Sentiment Analysis Dashboard — Kelantan")
+st.title("Sentiment Analysis Dashboard — Kelantan")
 
 # =====================================
 # 1. TEXT PREPROCESSING & VALIDATION
@@ -78,7 +78,7 @@ def get_kelantan_keywords_found(text):
 # =====================================
 @st.cache_data
 def load_and_train():
-    df = pd.read_csv("prototaip.csv")
+    df = pd.read_csv("kelantan_extended.csv")
 
     df = df.dropna(subset=["comment/tweet", "majority_sent"])
     df["clean_text"] = df["comment/tweet"].apply(clean_text)
@@ -317,8 +317,8 @@ if st.sidebar.button("🔄 Refresh Analysis"):
             hole=0.4,
             color_discrete_map={
                 'positive': '#00cc66',
-                'negative': '#ffaa00',
-                'neutral': '#ff4444'
+                'negative': '#ff444',
+                'neutral': '#ffaa00'
             }
         )
         st.plotly_chart(fig_pie, use_container_width=True)
