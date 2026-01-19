@@ -321,7 +321,7 @@ fig_pie = px.pie(
         'neutral': '#00cc66'     # green
     }
 )
-        st.plotly_chart(fig_pie, use_container_width=True)
+    st.plotly_chart(fig_pie, use_container_width=True)
 
     # =====================================
     # TREND ANALYSIS
