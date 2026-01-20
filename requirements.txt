@@ -3,3 +3,7 @@ ntscraper
 pandas
 scikit-learn
 plotly
+numpy
+requests
+beautifulsoup4
+lxml
