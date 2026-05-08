@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h1>Sentiment Prediction</h1>
+<p>Enter a social media comment or tweet to classify its sentiment.</p>
+
+<div class="table-box">
+    <h3>Test Sentiment Model</h3>
+
+    <form method="POST" action="/prediction">
+        <textarea 
+            name="user_text" 
+            rows="5" 
+            class="textarea"
+            placeholder="Example: Program gotong-royong ini sangat bagus untuk penduduk..."
+        >{{ user_text }}</textarea>
+
+        <br><br>
+
+        <button type="submit" class="btn">Analyze Sentiment</button>
+    </form>
+</div>
+
+{% if result %}
+<div class="card-container">
+    <div class="card">
+        <h3>Predicted Sentiment</h3>
+
+        {% if result == "positive" %}
+            <p class="green">Positive</p>
+        {% elif result == "negative" %}
+            <p class="red">Negative</p>
+        {% else %}
+            <p class="blue">Neutral</p>
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <h3>Model Confidence</h3>
+        <p>{{ confidence }}%</p>
+    </div>
+</div>
+<div class="table-box">
+    <h3>Latest Prediction History</h3>
+
+    <table>
+        <tr>
+            <th>No.</th>
+            <th>Text</th>
+            <th>Prediction</th>
+            <th>Confidence</th>
+        </tr>
+
+        {% for log in logs %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ log.input_text }}</td>
+            <td>{{ log.prediction }}</td>
+            <td>{{ log.confidence }}%</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+{% endif %}
+
+{% endblock %}

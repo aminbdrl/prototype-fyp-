@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body id="body">
+
+<div class="sidebar">
+    <h2>KSU Analyzer</h2>
+    <p class="subtitle">FYP 2 System</p>
+
+    <a href="/">Overview</a>
+    <a href="/analysis">Analysis</a>
+    <a href="/prediction">Prediction</a>
+    <a href="/districts">Districts</a>
+    <a href="/admin">Admin</a>
+</div>
+
+<div class="main">
+
+    <div class="topbar">
+        <div>
+            <h2>Kelantan Social Unity Sentiment Analyzer</h2>
+            <p>Tracking and predicting public opinion on community cohesion and local issues</p>
+        </div>
+
+        <div class="topbar-actions">
+
+    <div class="status-badge">
+        System Active
+    </div>
+    <button onclick="toggleDarkMode()" class="dark-btn">
+    Dark Mode
+    </button>
+    <a href="/logout" class="logout-btn">
+        Logout
+    </a>
+
+</div>
+    </div>
+
+    {% block content %}{% endblock %}
+
+</div>
+<script>
+function toggleDarkMode() {
+    document.body.classList.toggle("dark-mode");
+}
+</script>
+</body>
+</html>

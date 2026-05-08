@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h1>Sentiment Analysis</h1>
+<p>Detailed analysis of public opinion about social unity and local issues in Kelantan.</p>
+
+<div class="card-container">
+    <div class="card">
+        <h3>Community Engagement</h3>
+        <p>{{ community_engagement }}%</p>
+    </div>
+
+    <div class="card">
+        <h3>Social Harmony Index</h3>
+        <p>{{ social_harmony }}%</p>
+    </div>
+
+    <div class="card">
+        <h3>Public Discourse Quality</h3>
+        <p>{{ discourse_quality }}%</p>
+    </div>
+</div>
+
+<div class="chart-row">
+    <div class="chart-box">
+        <h3>Sentiment Count Analysis</h3>
+        <canvas id="sentimentBar"></canvas>
+    </div>
+
+    <div class="chart-box">
+        <h3>Top Trending Topics</h3>
+        <canvas id="topicChart"></canvas>
+    </div>
+</div>
+
+<script>
+const positiveCount = Number("{{ positive }}");
+const neutralCount = Number("{{ neutral }}");
+const negativeCount = Number("{{ negative }}");
+
+new Chart(document.getElementById('sentimentBar'), {
+    type: 'bar',
+    data: {
+        labels: ['Positive', 'Neutral', 'Negative'],
+        datasets: [{
+            label: 'Number of Posts',
+            data: [positiveCount, neutralCount, negativeCount]
+        }]
+    }
+});
+
+const topicLabels = JSON.parse('{{ topics | map(attribute="topic") | list | tojson | safe }}');
+const topicValues = JSON.parse('{{ topics | map(attribute="mentions") | list | tojson | safe }}');
+new Chart(document.getElementById('topicChart'), {
+    type: 'bar',
+    data: {
+        labels: topicLabels,
+        datasets: [{
+            label: 'Mentions',
+            data: topicValues
+        }]
+    }
+});
+</script>
+
+{% endblock %}

@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h1>Admin Panel</h1>
+<p>Manage dataset, monitor system status, and review latest records.</p>
+<a href="/export" class="btn">Export Report CSV</a>
+<a href="/clear-logs" class="btn-secondary">Clear Prediction Logs</a>
+<div class="card-container">
+    <div class="card">
+        <h3>Total Records</h3>
+        <p>{{ total_records }}</p>
+    </div>
+
+    <div class="card">
+        <h3>Total Users</h3>
+        <p>{{ total_users }}</p>
+    </div>
+
+    <div class="card">
+        <h3>Total Topics</h3>
+        <p>{{ total_topics }}</p>
+    </div>
+
+    <div class="card">
+        <h3>Languages</h3>
+        <p>{{ total_languages }}</p>
+    </div>
+</div>
+<div class="card-container">
+
+    <div class="card">
+        <h3>Database Records</h3>
+        <p>{{ db_records }}</p>
+    </div>
+
+    <div class="card">
+        <h3>Prediction Logs</h3>
+        <p>{{ prediction_logs_count }}</p>
+    </div>
+
+    <div class="card">
+        <h3>Admin Users</h3>
+        <p>{{ admin_count }}</p>
+    </div>
+
+</div>
+<div class="table-box">
+    <h3>Upload New Dataset</h3>
+
+    <form method="POST" action="/upload" enctype="multipart/form-data">
+        <input type="file" name="csv_file" accept=".csv" class="search-input">
+        <button type="submit" class="btn">Upload CSV</button>
+    </form>
+
+    <p style="color:#64748b;">
+        Upload CSV with columns: post/keyword, comment/tweet, username, majority_sent, lang_id
+    </p>
+</div>
+<div class="table-box">
+    <h3>Search Dataset</h3>
+
+    <form method="GET" action="/admin">
+        <input 
+            type="text" 
+            name="search" 
+            placeholder="Search topic, comment, username, sentiment, language..."
+            value="{{ search }}"
+            class="search-input"
+        >
+
+        <button type="submit" class="btn">Search</button>
+        <a href="/admin" class="btn-secondary">Reset</a>
+    </form>
+</div>
+<div class="table-box">
+    <h3>Latest Dataset Records</h3>
+
+    <table>
+        <tr>
+            <th>ID</th>
+            <th>Topic</th>
+            <th>Comment/Tweet</th>
+            <th>Username</th>
+            <th>Sentiment</th>
+            <th>Language</th>
+        </tr>
+
+        {% for row in latest_data %}
+        <tr>
+            <td>{{ row.id }}</td>
+            <td>{{ row["post/keyword"] }}</td>
+            <td>{{ row["comment/tweet"] }}</td>
+            <td>{{ row.username }}</td>
+            <td>{{ row.majority_sent }}</td>
+            <td>{{ row.lang_id }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+
+{% endblock %}

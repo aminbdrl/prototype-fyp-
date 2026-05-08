@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h1>Kelantan Social Unity Sentiment Analyzer</h1>
+<p>AI dashboard for tracking community sentiment and local issues.</p>
+<div class="table-box">
+
+    <form method="GET" action="/">
+
+        <label><strong>Select Analysis Range:</strong></label>
+
+        <select name="range" class="search-input" style="width:200px;">
+            <option value="7" {% if range_filter == "7" %}selected{% endif %}>
+                Last 7 Days
+            </option>
+
+            <option value="30" {% if range_filter == "30" %}selected{% endif %}>
+                Last 30 Days
+            </option>
+
+            <option value="90" {% if range_filter == "90" %}selected{% endif %}>
+                Last 90 Days
+            </option>
+        </select>
+
+        <button type="submit" class="btn">
+            Apply Filter
+        </button>
+        <a href="/" class="btn-secondary">Refresh</a>
+
+    </form>
+<p style="color:#64748b;">
+    Last updated: {{ last_updated }}
+</p>
+</div>
+<div class="card-container">
+    <div class="card">
+        <h3>Positive Sentiment</h3>
+        <p class="green">{{ positive }}%</p>
+    </div>
+
+    <div class="card">
+        <h3>Neutral Sentiment</h3>
+        <p class="blue">{{ neutral }}%</p>
+    </div>
+
+    <div class="card">
+        <h3>Negative Sentiment</h3>
+        <p class="red">{{ negative }}%</p>
+    </div>
+
+    <div class="card">
+        <h3>Unity Score</h3>
+        <p>{{ unity_score }}%</p>
+    </div>
+</div>
+
+<div class="chart-row">
+    <div class="chart-box">
+        <h3>Sentiment Distribution</h3>
+        <canvas id="sentimentChart"></canvas>
+    </div>
+</div>
+<div class="chart-box">
+    <h3>Sentiment Trend Analysis</h3>
+    <canvas id="trendChart"></canvas>
+</div>
+<script>
+
+const positiveTrend = JSON.parse('{{ positive_trend | tojson | safe }}');
+const neutralTrend = JSON.parse('{{ neutral_trend | tojson | safe }}');
+const negativeTrend = JSON.parse('{{ negative_trend | tojson | safe }}');
+
+new Chart(document.getElementById('trendChart'), {
+    type: 'line',
+    data: {
+        labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+        datasets: [
+            {
+                label: 'Positive',
+                data: positiveTrend
+            },
+            {
+                label: 'Neutral',
+                data: neutralTrend
+            },
+            {
+                label: 'Negative',
+                data: negativeTrend
+            }
+        ]
+    }
+});
+
+const positive = Number("{{ positive }}");
+const neutral = Number("{{ neutral }}");
+const negative = Number("{{ negative }}");
+
+new Chart(document.getElementById('sentimentChart'), {
+    type: 'doughnut',
+    data: {
+        labels: ['Positive', 'Neutral', 'Negative'],
+        datasets: [{
+            data: [positive, neutral, negative]
+        }]
+    }
+});
+
+</script>
+<div class="table-box ai-box">
+
+    <h3>AI Analytics Summary</h3>
+
+    <p style="line-height:1.8;">
+        {{ ai_summary }}
+    </p>
+
+</div>
+    <h3>Trending Topics & Local Issues Overview</h3>
+
+    <table>
+        <tr>
+            <th>No.</th>
+            <th>Topic / Keyword</th>
+            <th>Mentions</th>
+            <th>Priority</th>
+        </tr>
+
+        {% for issue in local_issues %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ issue.topic }}</td>
+            <td>{{ issue.mentions }}</td>
+            <td>
+                {% if issue.mentions > 100 %}
+                    High
+                {% elif issue.mentions > 50 %}
+                    Medium
+                {% else %}
+                    Low
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+{% endblock %}

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<h1>District Sentiment</h1>
+<p>Sentiment distribution by Kelantan districts.</p>
+
+<div class="chart-box">
+    <h3>District-wise Sentiment Score</h3>
+    <canvas id="districtChart"></canvas>
+</div>
+
+<div class="table-box">
+    <h3>District Sentiment Overview</h3>
+
+    <table>
+        <tr>
+            <th>No.</th>
+            <th>District</th>
+            <th>Sentiment Score</th>
+            <th>Status</th>
+        </tr>
+
+        {% for item in districts_data %}
+        <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ item.district }}</td>
+            <td>{{ item.score }}%</td>
+            <td>
+                {% if item.score >= 75 %}
+                    Strong
+                {% elif item.score >= 70 %}
+                    Moderate
+                {% else %}
+                    Needs Attention
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+</div>
+
+<script>
+const districtLabels = JSON.parse('{{ districts_data | map(attribute="district") | list | tojson | safe }}');
+const districtScores = JSON.parse('{{ districts_data | map(attribute="score") | list | tojson | safe }}');
+
+new Chart(document.getElementById('districtChart'), {
+    type: 'bar',
+    data: {
+        labels: districtLabels,
+        datasets: [{
+            label: 'Sentiment Score (%)',
+            data: districtScores
+        }]
+    }
+});
+</script>
+
+{% endblock %}
