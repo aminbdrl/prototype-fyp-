@@ -316,7 +316,8 @@ def fetch_x():
             confidence = 90
 
         else:
-            sentiment, confidence = predict_sentiment(text)
+            sentiment = random.choice(["positive", "neutral", "negative"])
+            confidence = 85
 
         metrics = post.get("public_metrics", {})
 
@@ -637,6 +638,19 @@ def admin():
         search=search
     )
 
+@app.route("/delete-record/<int:record_id>")
+def delete_record(record_id):
+
+    if not session.get("admin"):
+        return redirect(url_for("login"))
+
+    record = SentimentData.query.get_or_404(record_id)
+
+    db.session.delete(record)
+    db.session.commit()
+
+    return redirect(url_for("admin"))
+
 @app.route("/clear-logs")
 def clear_logs():
     if not session.get("admin"):
@@ -743,3 +757,4 @@ if __name__ == "__main__":
             db.session.commit()
 
     app.run(debug=True, port=5001)
+

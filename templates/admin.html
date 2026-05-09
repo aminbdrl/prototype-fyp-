@@ -106,6 +106,7 @@
             <th>Username</th>
             <th>Sentiment</th>
             <th>Language</th>
+            <th>Action</th>
         </tr>
 
         {% for row in latest_data %}
@@ -116,6 +117,13 @@
             <td>{{ row.username }}</td>
             <td>{{ row.majority_sent }}</td>
             <td>{{ row.lang_id }}</td>
+
+            <td>
+                <a href="/delete-record/{{ row['id'] }}"
+                    onclick="return confirm('Delete this record?')">
+                     Delete
+                 </a>
+             </td>
         </tr>
         {% endfor %}
     </table>
