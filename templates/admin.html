@@ -23,7 +23,7 @@
     </div>
 
     <div class="card">
-        <h3>Languages</h3>
+        <h3>Language/Dialect Types</h3>
         <p>{{ total_languages }}</p>
     </div>
 </div>
@@ -45,10 +45,15 @@
     </div>
 
 <div class="table-box">
+    <h3>AI Monitoring Summary</h3>
+    <p>{{ admin_summary }}</p>
+</div>
+
+<div class="table-box">
 
     <h3>Fetch Live X Posts</h3>
 
-    <form method="POST" action="/fetch-x">
+    <form method="POST" action="/fetch-x" onsubmit="showLoading()">
 
         <input
             type="text"
@@ -58,13 +63,25 @@
             required
         >
 
-        <button type="submit" class="btn">
+        <button type="submit" class="btn" id="fetchBtn">
             Fetch from X
         </button>
 
     </form>
 
+    <p id="loadingText" style="display:none; margin-top:10px; color:#2563eb; font-weight:bold;">
+        Fetching live posts from X... Please wait.
+    </p>
+
 </div>
+
+<script>
+function showLoading() {
+    document.getElementById("fetchBtn").disabled = true;
+    document.getElementById("fetchBtn").innerText = "Fetching...";
+    document.getElementById("loadingText").style.display = "block";
+}
+</script>
 
 </div>
 <div class="table-box">
