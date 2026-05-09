@@ -44,6 +44,28 @@
         <p>{{ admin_count }}</p>
     </div>
 
+<div class="table-box">
+
+    <h3>Fetch Live X Posts</h3>
+
+    <form method="POST" action="/fetch-x">
+
+        <input
+            type="text"
+            name="keyword"
+            placeholder="Example: Kelantan banjir"
+            class="search-input"
+            required
+        >
+
+        <button type="submit" class="btn">
+            Fetch from X
+        </button>
+
+    </form>
+
+</div>
+
 </div>
 <div class="table-box">
     <h3>Upload New Dataset</h3>

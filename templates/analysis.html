@@ -30,7 +30,9 @@
 
     <div class="chart-box">
         <h3>Top Trending Topics</h3>
+        <div style="height:360px;">
         <canvas id="topicChart"></canvas>
+    </div>
     </div>
 </div>
 
@@ -50,18 +52,61 @@ new Chart(document.getElementById('sentimentBar'), {
     }
 });
 
-const topicLabels = JSON.parse('{{ topics | map(attribute="topic") | list | tojson | safe }}');
+const topicLabels = JSON.parse('{{ topics | map(attribute="short_topic") | list | tojson | safe }}');
+const topicFullLabels = JSON.parse('{{ topics | map(attribute="topic") | list | tojson | safe }}');
 const topicValues = JSON.parse('{{ topics | map(attribute="mentions") | list | tojson | safe }}');
+
 new Chart(document.getElementById('topicChart'), {
     type: 'bar',
     data: {
         labels: topicLabels,
         datasets: [{
             label: 'Mentions',
-            data: topicValues
+            data: topicValues,
+            borderWidth: 1,
+            borderRadius: 8,
+            barThickness: 22
         }]
+    },
+    options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                display: false
+            },
+            tooltip: {
+                callbacks: {
+                    title: function(context) {
+                        return topicFullLabels[context[0].dataIndex];
+                    },
+                    label: function(context) {
+                        return 'Mentions: ' + context.raw;
+                    }
+                }
+            }
+        },
+        scales: {
+            x: {
+                beginAtZero: true,
+                ticks: {
+                    precision: 0
+                },
+                title: {
+                    display: true,
+                    text: 'Number of Mentions'
+                }
+            },
+            y: {
+                ticks: {
+                    font: {
+                        size: 12
+                    }
+                }
+            }
+        }
     }
 });
 </script>
-
 {% endblock %}

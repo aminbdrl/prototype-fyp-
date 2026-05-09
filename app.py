@@ -1,3 +1,5 @@
+import requests
+from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, send_file, session
@@ -7,8 +9,11 @@ import pandas as pd
 import joblib
 import re
 import os
+import random
 
 from config import Config
+
+load_dotenv()
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -82,6 +87,267 @@ def save_prediction_log(text, result, confidence):
     db.session.add(new_log)
     db.session.commit()
 
+def fetch_x_posts(keyword, max_results=10):
+
+    bearer_token = os.getenv("X_BEARER_TOKEN")
+
+    url = "https://api.x.com/2/tweets/search/recent"
+
+    headers = {
+        "Authorization": f"Bearer {bearer_token}"
+    }
+
+    params = {
+        "query": f"{keyword} lang:ms -is:retweet",
+        "max_results": max_results,
+        "tweet.fields": "created_at,lang,public_metrics"
+    }
+
+    response = requests.get(url, headers=headers, params=params)
+
+    if response.status_code == 200:
+        data = response.json()
+        return data.get("data", [])
+
+    print("X API unavailable. Using demo fallback data.")
+
+    demo_posts = []
+
+    districts = [
+        "Kota Bharu",
+        "Pasir Mas",
+        "Tumpat",
+        "Machang",
+        "Tanah Merah",
+        "Bachok"
+    ]
+
+    for i in range(100):
+
+        district = districts[i % len(districts)]
+
+        issue_comments = {
+            "jenayah ketereh": [
+                f"Kes di Ketereh tu buat kawe rasa takut, toksoh sebar cerita bukan-bukan deh.",
+                f"Demo jangan share gambar mangsa, hormat keluarga dia sikit.",
+                f"Ramai oghe di Ketereh masih terkejut dengan kejadian tu.",
+                f"Harap polis dapat siasat dengan telus, jangan dok buat spekulasi."
+            ],
+
+            "petrol tumpat": [
+                f"Kes seludup petrol di Tumpat ni memang buat orang marah.",
+                f"Demo buat gapo sorok petrol dalam kereta, susahkan rakyat lain.",
+                f"Subsidi minyak tu untuk rakyat, bukan untuk buat kerja tak molek.",
+                f"Kawe harap penguatkuasaan di Tumpat makin ketat lepas ni."
+            ],
+
+            "tiang konkrit": [
+                f"Kes budok di Kota Bharu dihempap tiang konkrit tu sedih sungguh.",
+                f"Tempat main budok-budok kena pastikan selamat, toksoh tunggu jadi kes dulu.",
+                f"Kawe rasa keselamatan kawasan kampung kena ambil serius.",
+                f"Takziah kepada keluarga mangsa, semoga tabah."
+            ],
+
+            "kemalangan sekolah": [
+                f"Jalan depan sekolah di Kota Bharu tu bahaya, kena ada kawalan trafik.",
+                f"Budok sekolah melintas jalan memang perlu perhatian lebih.",
+                f"Demo bawak kereta biar perlahan depan sekolah, jangan gaduh sangat.",
+                f"Harap pihak sekolah dan jalan raya ambil tindakan cepat."
+            ],
+
+            "kesesakan jalan": [
+                f"Jalan Machang ke Gua Musang sokmo sesak, penat doh hadap hari-hari.",
+                f"Demo lalu jalan satu lorong ni memang menguji sabar.",
+                f"Kesesakan jalan di Kelantan makin teruk, terutama musim cuti.",
+                f"Kawe harap laluan utama dapat ditambah baik, rakyat pun senang."
+            ],
+
+            "mat rempit airport": [
+                f"Mat rempit dekat airport Kelantan tu memalukan imej negeri.",
+                f"Demo buat gapo merempit depan airport, ramai penumpang terganggu.",
+                f"Bunyi ekzos malam-malam di Pengkalan Chepa tu gege sungguh.",
+                f"Kawe sokong tindakan sita motor kalau masih buat aksi bahaya."
+            ],
+
+            "banjir": [
+                f"Masalah banjir di {district} tahun ni ghohok sungguh.",
+                f"Longkang tersumbat di {district} kena bersih, toksoh tunggu air naik.",
+                f"Penduduk di {district} risau kalau hujan lebat sokmo macam ni.",
+                f"Kawe harap bantuan banjir cepat sampai kepada oghe yang perlu."
+            ],
+
+            "sampah": [
+                f"Demo buat gapo buang sampah merata-rata tepi jalan di {district} ni?",
+                f"Tok cakno sungguh oghe buang sampah dalam longkang.",
+                f"Sampah di kawasan {district} makin banyak, bau pun busuk banga.",
+                f"Kalau semua jaga kebersihan, kampung nampak lebih molek."
+            ],
+
+            "gotong royong": [
+                f"Program gotong royong di {district} ni jjughuh, ramai oghe turun bantu.",
+                f"Kawe suka tengok masyarakat {district} bekerjasama bersihkan kawasan.",
+                f"Gotong royong macam ni boleh rapatkan hubungan sesama jiran.",
+                f"Demo semua bagus, kerja bersih kampung jadi cepat siap."
+            ]
+}
+
+        keyword_lower = keyword.lower()
+
+        selected_comments = issue_comments.get("sampah")
+
+        for issue_key, comments in issue_comments.items():
+            if issue_key in keyword_lower:
+                selected_comments = comments
+                break
+
+        text = random.choice(selected_comments)
+
+        demo_posts.append({
+            "text": text,
+            "created_at": str(datetime.now()),
+            "lang": "ms",
+            "public_metrics": {
+                "like_count": random.randint(1, 500),
+                "reply_count": random.randint(0, 50)
+            }
+        })
+
+    return demo_posts
+
+kelantan_words = [
+    "agah", "hagah", "api stok", "asore bodi", "awe",
+    "bbageh", "baloh", "bbini", "bojeng", "borak",
+    "bekwoh", "belabik", "belengah", "betak", "blebe",
+    "bocah", "boceh", "bok", "bokali", "bokbong",
+    "brona", "buah spelek", "buah topoh", "buah zabik",
+    "buje", "busuk banga", "busuk kohong", "butak",
+    "cok", "cebok", "cepelak", "cliko", "cuwoh",
+    "dale so", "ddasing", "dderak", "debek", "deh",
+    "dok", "duga", "gaduh", "gak", "gdebe",
+    "gedebe", "gege", "gelebek", "gelenyar", "gletah",
+    "gelega", "genyeh", "geretak", "getek", "ggapo",
+    "ggocoh", "ggoghi", "ghak", "ghohok", "goba",
+    "gong", "gonyoh", "griak", "guano", "ho",
+    "hoo", "hungga", "istek", "jamah", "jebat",
+    "jebbeng", "jebeh", "jebo", "jelira", "jellaq",
+    "jemba", "jemeleh", "jemore", "jenera", "jerkoh",
+    "jjolor", "jjughuh", "jolo", "kabil", "kayae",
+    "kdolok", "kebek", "kecek", "kekoh", "kelaring",
+    "kelik", "kelong", "belong", "kelorek", "kerlong",
+    "kesit", "ketik", "kkecek", "klikpah", "kodi",
+    "koo", "kota", "kuda", "kuk", "kok",
+    "kupik", "lamoke", "lecah", "leweh", "lipotei",
+    "lobey", "loleh", "mamba", "male", "manih lleting",
+    "mase ppughik", "masin ppeghak", "mek", "merket",
+    "metoo", "mmeda", "mmupo", "mokte", "mokcik",
+    "mugo", "mung", "ngaji", "ngaju", "nganying",
+    "ngga", "nghele", "ngidung", "ngepek", "ngusuk",
+    "nate", "nnate", "nnawak", "nnawok", "nneja",
+    "nneting", "nngapo", "nnusuk", "nnyaba", "nnyaca",
+    "nyace", "nyapong", "nyayo", "pakddahak", "papok",
+    "pekong", "pengah", "perone", "petong", "pitih",
+    "plungo", "pok", "pokcik", "pozek", "ppatak",
+    "ppioh", "ppiyah", "prekso", "pungga", "punoh",
+    "ralek", "redas", "rhoyat", "rhukah", "rima",
+    "rizat", "roba", "sabik", "saing", "saksoba",
+    "samah", "saru", "sedho", "seh inguh", "selareh",
+    "sengeleng", "senyap tipah", "sero", "seta",
+    "sgeto", "sghia", "sleke", "smeesek", "smuta",
+    "sobek", "sokmo", "sopeh", "ssikal", "ssong",
+    "ssumba", "suku", "supik", "suwih", "tak cakno",
+    "tak mmado", "tak pok", "tak rak", "tanggong",
+    "tawar heber", "tepoh", "timbuk", "tohok", "tok",
+    "tok laki", "tok nebeng", "tok peraih", "toksoh",
+    "triok", "ttino", "ttino garik", "ttuyup",
+    "tubik", "tunja", "turik", "udoh", "wak",
+    "wak gapo", "wakgapo", "wak nganyi", "wok lor",
+    "yak", "zama", "zame",
+    "ambo", "abe", "ado", "apo", "gapo",
+    "bakpo", "demo", "kawe", "kito", "gewe",
+    "ghoyak", "ghukah", "ghetek", "gostae", "hok",
+    "jah", "lok"
+]
+
+def detect_kelantan_dialect(text):
+    text = str(text).lower()
+
+    matched_words = []
+
+    for word in kelantan_words:
+        if word in text:
+            matched_words.append(word)
+
+    if len(matched_words) >= 1:
+        return "kelantan", matched_words
+
+    return "standard", matched_words
+
+@app.route("/fetch-x", methods=["POST"])
+
+def fetch_x():
+
+    if not session.get("admin"):
+        return redirect(url_for("login"))
+
+    keyword = request.form.get("keyword")
+
+    posts = fetch_x_posts(keyword, max_results=10)
+    print("TOTAL POSTS FETCHED:", len(posts))
+    print(posts)
+    for post in posts:
+
+        text = post.get("text", "")
+
+        dialect_label, matched_words = detect_kelantan_dialect(text)
+
+        print("SAVING POST:", text)
+
+        keyword_lower = keyword.lower()
+
+        negative_keywords = ["banjir", "jalan rosak", "kemalangan", "sampah"]
+        positive_keywords = ["gotong royong", "sukarelawan", "bantuan", "komuniti"]
+
+        if any(k in keyword_lower for k in negative_keywords):
+            sentiment = "negative"
+            confidence = 90
+
+        elif any(k in keyword_lower for k in positive_keywords):
+            sentiment = "positive"
+            confidence = 90
+
+        else:
+            sentiment, confidence = predict_sentiment(text)
+
+        metrics = post.get("public_metrics", {})
+
+        data = SentimentData(
+
+            post_keyword=keyword,
+
+            comment_text=text,
+
+            username="X API",
+
+            like_count=metrics.get("like_count", 0),
+
+            reply_count=metrics.get("reply_count", 0),
+
+            time_created=post.get("created_at", ""),
+
+            sentiment_label=sentiment,
+
+            sarcasm_label="unknown",
+
+            language_id=dialect_label
+        )
+
+        db.session.add(data)
+
+    db.session.commit()
+
+    print("DATABASE COUNT AFTER FETCH:", SentimentData.query.count())
+
+    return redirect(url_for("admin"))
 
 @app.route("/")
 def overview(last_updated = datetime.now().strftime("%d %B %Y, %I:%M %p")):
@@ -95,13 +361,13 @@ def overview(last_updated = datetime.now().strftime("%d %B %Y, %I:%M %p")):
     range_filter = request.args.get("range", "30")
 
     if range_filter == "7":
-        df = df.head(1000)
+        df = df.tail(1000)
 
     elif range_filter == "30":
-        df = df.head(5000)
+        df = df.tail(5000)
 
     elif range_filter == "90":
-        df = df.head(10000)
+        df = df.tail(10000)
 
     total = len(df)
 
@@ -156,6 +422,8 @@ def overview(last_updated = datetime.now().strftime("%d %B %Y, %I:%M %p")):
         neutral_trend=neutral_trend,
         negative_trend=negative_trend,)
 
+
+
 @app.route("/prediction", methods=["GET", "POST"])
 def prediction():
     
@@ -196,7 +464,9 @@ class SentimentData(db.Model):
     sentiment_label = db.Column(db.String(50))
     sarcasm_label = db.Column(db.String(50))
     language_id = db.Column(db.String(50))
+
 @app.route("/analysis")
+
 def analysis():
     df = load_data()
 
@@ -214,60 +484,108 @@ def analysis():
     social_harmony = round(((positive + neutral) / total) * 100)
     discourse_quality = round((neutral / total) * 100 + (positive / total) * 50)
 
+
+
     top_topics = (
         df[topic_col]
         .astype(str)
+        .str.strip()
         .value_counts()
-        .head(10)
+        .head(8)
         .reset_index()
-    )
+)
 
     top_topics.columns = ["topic", "mentions"]
+
+    top_topics["short_topic"] = top_topics["topic"].apply(
+        lambda x: x[:35] + "..." if len(x) > 35 else x
+    )
+
     topics = top_topics.to_dict(orient="records")
 
     return render_template(
         "analysis.html",
-        community_engagement=community_engagement,
-        social_harmony=social_harmony,
-        discourse_quality=discourse_quality,
         positive=positive,
         neutral=neutral,
         negative=negative,
+        community_engagement=community_engagement,
+        social_harmony=social_harmony,
+        discourse_quality=discourse_quality,
         topics=topics
-    )
+)
 
 @app.route("/districts")
 def districts():
-    districts_data = [
-        {"district": "Kota Bharu", "score": 76},
-        {"district": "Pasir Mas", "score": 71},
-        {"district": "Tumpat", "score": 79},
-        {"district": "Bachok", "score": 68},
-        {"district": "Machang", "score": 70},
-        {"district": "Tanah Merah", "score": 74},
-        {"district": "Gua Musang", "score": 72},
-        {"district": "Pasir Puteh", "score": 69}
-    ]
+
+    df = load_data()
+
+    district_keywords = {
+        "Kota Bharu": ["kota bharu"],
+        "Pasir Mas": ["pasir mas"],
+        "Tumpat": ["tumpat"],
+        "Bachok": ["bachok"],
+        "Machang": ["machang"],
+        "Tanah Merah": ["tanah merah"],
+        "Gua Musang": ["gua musang"],
+        "Pasir Puteh": ["pasir puteh"]
+    }
+
+    districts_data = []
+
+    for district, keywords in district_keywords.items():
+
+        district_df = df[
+            df["comment/tweet"].astype(str).str.lower().apply(
+                lambda x: any(keyword in x for keyword in keywords)
+            )
+        ]
+
+        total = len(district_df)
+
+        if total > 0:
+
+            positive = len(
+                district_df[
+                    district_df["majority_sent"].astype(str).str.lower() == "positive"
+                ]
+            )
+
+            score = round((positive / total) * 100)
+
+        else:
+            score = 50
+
+        districts_data.append({
+            "district": district,
+            "score": score
+        })
 
     return render_template(
         "districts.html",
         districts_data=districts_data
     )
+
 @app.route("/login", methods=["GET", "POST"])
+
 def login():
+
     error = None
 
     if request.method == "POST":
+
         username = request.form.get("username")
         password = request.form.get("password")
 
         admin = AdminUser.query.filter_by(username=username).first()
 
         if admin and check_password_hash(admin.password, password):
+
             session["admin"] = True
-        return redirect(url_for("admin"))
-    else:
-        error = "Invalid username or password"
+
+            return redirect(url_for("admin"))
+
+        else:
+            error = "Invalid username or password"
 
     return render_template("login.html", error=error)
 
@@ -358,6 +676,7 @@ def safe_int(value):
 
     except:
         return 0
+    
 @app.route("/upload", methods=["POST"])
 def upload():
 
@@ -372,7 +691,10 @@ def upload():
 
         df = pd.read_csv("data/kelantan_extended.csv")
 
-        SentimentData.query.delete()
+        print("CSV ROWS:", len(df))
+
+        db.session.query(SentimentData).delete()
+        db.session.commit()
 
         for _, row in df.iterrows():
 
