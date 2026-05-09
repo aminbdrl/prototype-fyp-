@@ -122,7 +122,7 @@ def fetch_x_posts(keyword, max_results=10):
         "Bachok"
     ]
 
-    for i in range(100):
+    for i in range(20):
 
         district = districts[i % len(districts)]
 
@@ -316,8 +316,7 @@ def fetch_x():
             confidence = 90
 
         else:
-            sentiment = random.choice(["positive", "neutral", "negative"])
-            confidence = 85
+            sentiment, confidence = predict_sentiment(text)
 
         metrics = post.get("public_metrics", {})
 
