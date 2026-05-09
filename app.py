@@ -162,7 +162,7 @@ def fetch_x_posts(keyword, max_results=10):
                 f"Kawe harap laluan utama dapat ditambah baik, rakyat pun senang."
             ],
 
-            "mat rempit airport": [
+            "rempit": [
                 f"Mat rempit dekat airport Kelantan tu memalukan imej negeri.",
                 f"Demo buat gapo merempit depan airport, ramai penumpang terganggu.",
                 f"Bunyi ekzos malam-malam di Pengkalan Chepa tu gege sungguh.",
@@ -188,12 +188,22 @@ def fetch_x_posts(keyword, max_results=10):
                 f"Kawe suka tengok masyarakat {district} bekerjasama bersihkan kawasan.",
                 f"Gotong royong macam ni boleh rapatkan hubungan sesama jiran.",
                 f"Demo semua bagus, kerja bersih kampung jadi cepat siap."
+            ],
+
+            "umum": [
+                f"Isu {keyword} di {district} makin banyak dibincang oleh masyarakat.",
+                f"Ramai oghe di {district} beri pandangan pasal {keyword}.",
+                f"Perbincangan tentang {keyword} di {district} semakin aktif.",
+                f"Kawe harap isu {keyword} di {district} dapat perhatian pihak berkaitan."
+            
             ]
+
+
 }
 
         keyword_lower = keyword.lower()
 
-        selected_comments = issue_comments.get("sampah")
+        selected_comments = issue_comments.get("umum")
 
         for issue_key, comments in issue_comments.items():
             if issue_key in keyword_lower:
@@ -269,18 +279,14 @@ kelantan_words = [
 ]
 
 def detect_kelantan_dialect(text):
-    text = str(text).lower()
 
-    matched_words = []
+    text = str(text).lower()
 
     for word in kelantan_words:
         if word in text:
-            matched_words.append(word)
+            return "kelantan"
 
-    if len(matched_words) >= 1:
-        return "kelantan", matched_words
-
-    return "standard", matched_words
+    return "malay"
 
 @app.route("/fetch-x", methods=["POST"])
 
@@ -292,31 +298,57 @@ def fetch_x():
     keyword = request.form.get("keyword")
 
     posts = fetch_x_posts(keyword, max_results=10)
+
     print("TOTAL POSTS FETCHED:", len(posts))
-    print(posts)
+
     for post in posts:
 
         text = post.get("text", "")
 
-        dialect_label, matched_words = detect_kelantan_dialect(text)
+        dialect_label = detect_kelantan_dialect(text)
 
-        print("SAVING POST:", text)
+        print("TEXT:", text)
+        print("DIALECT:", dialect_label)
 
-        keyword_lower = keyword.lower()
+        text_lower = text.lower()
 
-        negative_keywords = ["banjir", "jalan rosak", "kemalangan", "sampah"]
-        positive_keywords = ["gotong royong", "sukarelawan", "bantuan", "komuniti"]
+        negative_phrases = [
+            "bunyi ekzos",
+            "merempit",
+            "terganggu",
+            "memalukan",
+            "jalan berlubang",
+            "banjir",
+            "sampah",
+            "sesak",
+            "bahaya",
+            "takut",
+            "sedih",
+            "seludup"
+        ]
 
-        if any(k in keyword_lower for k in negative_keywords):
+        positive_phrases = [
+            "sokong",
+            "gotong royong",
+            "bekerjasama",
+            "molek",
+            "jjughuh",
+            "bantu",
+            "bagus",
+            "bersih"
+        ]
+
+        if any(word in text_lower for word in negative_phrases):
             sentiment = "negative"
             confidence = 90
 
-        elif any(k in keyword_lower for k in positive_keywords):
+        elif any(word in text_lower for word in positive_phrases):
             sentiment = "positive"
             confidence = 90
 
         else:
-            sentiment, confidence = predict_sentiment(text)
+            sentiment = "neutral"
+            confidence = 80
 
         metrics = post.get("public_metrics", {})
 
@@ -348,6 +380,7 @@ def fetch_x():
     print("DATABASE COUNT AFTER FETCH:", SentimentData.query.count())
 
     return redirect(url_for("admin"))
+
 
 @app.route("/")
 def overview(last_updated = datetime.now().strftime("%d %B %Y, %I:%M %p")):
@@ -729,8 +762,13 @@ def upload():
 
                 sarcasm_label=str(row.get("majority_sarc", "")),
 
-                language_id=str(row.get("lang_id", ""))
+                language_id=detect_kelantan_dialect(
+                str(row.get("comment/tweet", ""))
+
+                )
             )
+
+
 
             db.session.add(data)
 
@@ -738,7 +776,25 @@ def upload():
 
     return redirect(url_for("admin"))
 
+@app.route("/fix-language")
+def fix_language():
+
+    records = SentimentData.query.all()
+
+    for row in records:
+
+        if str(row.language_id).strip().lower() == "kelantan":
+            row.language_id = "kelantan"
+
+        else:
+            row.language_id = "malay"
+
+    db.session.commit()
+
+    return "Language updated successfully"
+
 if __name__ == "__main__":
+
 
     with app.app_context():
         db.create_all()
@@ -756,4 +812,6 @@ if __name__ == "__main__":
             db.session.commit()
 
     app.run(debug=True, port=5001)
+
+
 
