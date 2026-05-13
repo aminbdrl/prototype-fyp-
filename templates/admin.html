@@ -87,15 +87,42 @@ function showLoading() {
 <div class="table-box">
     <h3>Upload New Dataset</h3>
 
-    <form method="POST" action="/upload" enctype="multipart/form-data">
-        <input type="file" name="csv_file" accept=".csv" class="search-input">
-        <button type="submit" class="btn">Upload CSV</button>
+    <p style="color:#64748b; margin-bottom:15px;">
+        Upload any CSV dataset. The system will auto-detect text columns, filter Kelantan-related content, remove political topics, detect dialect, and predict sentiment.
+    </p>
+
+    <form method="POST" action="/upload" enctype="multipart/form-data" onsubmit="showUploadLoading()">
+        <div style="display:flex; gap:10px; align-items:center;">
+            <input 
+                type="file" 
+                name="csv_file" 
+                accept=".csv" 
+                class="search-input"
+                required
+            >
+
+            <button type="submit" class="btn" id="uploadBtn">
+                Upload & Analyze
+            </button>
+        </div>
     </form>
 
-    <p style="color:#64748b;">
-        Upload CSV with columns: post/keyword, comment/tweet, username, majority_sent, lang_id
+    <p id="uploadLoading" style="display:none; margin-top:12px; color:#2563eb; font-weight:bold;">
+        Uploading and analyzing dataset... Please wait.
+    </p>
+
+    <p style="color:#64748b; margin-top:12px; font-size:14px;">
+        Supported columns: text, content, news, comment, tweet, title, topic, username, source.
     </p>
 </div>
+
+<script>
+function showUploadLoading() {
+    document.getElementById("uploadBtn").disabled = true;
+    document.getElementById("uploadBtn").innerText = "Analyzing...";
+    document.getElementById("uploadLoading").style.display = "block";
+}
+</script>
 <div class="table-box">
     <h3>Search Dataset</h3>
 
@@ -136,11 +163,11 @@ function showLoading() {
             <td>{{ row.lang_id }}</td>
 
             <td>
-                <a href="/delete-record/{{ row['id'] }}"
-                    onclick="return confirm('Delete this record?')">
-                     Delete
-                 </a>
-             </td>
+                <a href="{{ url_for('delete_record', id=row['id']) }}"
+                onclick="return confirm('Delete this record?')">
+                Delete
+                </a>
+            </td>
         </tr>
         {% endfor %}
     </table>

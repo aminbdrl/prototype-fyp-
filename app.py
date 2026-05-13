@@ -37,6 +37,7 @@ def load_data():
 
     for item in data:
         rows.append({
+            "id": item.id,
             "post/keyword": item.post_keyword,
             "comment/tweet": item.comment_text,
             "username": item.username,
@@ -409,23 +410,20 @@ kelantan_words = [
     "brona", "buah spelek", "buah topoh", "buah zabik",
     "buje", "busuk banga", "busuk kohong", "butak",
     "cok", "cebok", "cepelak", "cliko", "cuwoh",
-    "dale so", "ddasing", "dderak", "debek", "deh",
-    "dok", "duga", "gaduh", "gak", "gdebe",
+    "dale so", "ddasing", "dderak", "debek", "duga", "gaduh", "gak", "gdebe",
     "gedebe", "gege", "gelebek", "gelenyar", "gletah",
     "gelega", "genyeh", "geretak", "getek", "ggapo",
-    "ggocoh", "ggoghi", "ghak", "ghohok", "goba",
-    "gong", "gonyoh", "griak", "guano", "ho",
-    "hoo", "hungga", "istek", "jamah", "jebat",
+    "ggocoh", "ggoghi", "ghohok", "goba",
+     "gonyoh", "griak", "guano",  "hungga", "istek", "jamah", "jebat",
     "jebbeng", "jebeh", "jebo", "jelira", "jellaq",
     "jemba", "jemeleh", "jemore", "jenera", "jerkoh",
     "jjolor", "jjughuh", "jolo", "kabil", "kayae",
     "kdolok", "kebek", "kecek", "kekoh", "kelaring",
     "kelik", "kelong", "belong", "kelorek", "kerlong",
     "kesit", "ketik", "kkecek", "klikpah", "kodi",
-    "koo", "kota", "kuda", "kuk", "kok",
     "kupik", "lamoke", "lecah", "leweh", "lipotei",
     "lobey", "loleh", "mamba", "male", "manih lleting",
-    "mase ppughik", "masin ppeghak", "mek", "merket",
+    "mase ppughik", "masin ppeghak", "merket",
     "metoo", "mmeda", "mmupo", "mokte", "mokcik",
     "mugo", "mung", "ngaji", "ngaju", "nganying",
     "ngga", "nghele", "ngidung", "ngepek", "ngusuk",
@@ -433,7 +431,7 @@ kelantan_words = [
     "nneting", "nngapo", "nnusuk", "nnyaba", "nnyaca",
     "nyace", "nyapong", "nyayo", "pakddahak", "papok",
     "pekong", "pengah", "perone", "petong", "pitih",
-    "plungo", "pok", "pokcik", "pozek", "ppatak",
+    "plungo",  "pokcik", "pozek", "ppatak",
     "ppioh", "ppiyah", "prekso", "pungga", "punoh",
     "ralek", "redas", "rhoyat", "rhukah", "rima",
     "rizat", "roba", "sabik", "saing", "saksoba",
@@ -441,26 +439,23 @@ kelantan_words = [
     "sengeleng", "senyap tipah", "sero", "seta",
     "sgeto", "sghia", "sleke", "smeesek", "smuta",
     "sobek", "sokmo", "sopeh", "ssikal", "ssong",
-    "ssumba", "suku", "supik", "suwih", "tak cakno",
+    "ssumba",  "supik", "suwih", "tak cakno",
     "tak mmado", "tak pok", "tak rak", "tanggong",
-    "tawar heber", "tepoh", "timbuk", "tohok", "tok",
+    "tawar heber", "tepoh", "timbuk", "tohok",
     "tok laki", "tok nebeng", "tok peraih", "toksoh",
     "triok", "ttino", "ttino garik", "ttuyup",
-    "tubik", "tunja", "turik", "udoh", "wak",
-    "wak gapo", "wakgapo", "wak nganyi", "wok lor",
-    "yak", "zama", "zame",
-    "ambo", "abe", "ado", "apo", "gapo",
+    "tubik", "tunja", "turik", "udoh", 
+    "wak gapo", "wakgapo", "wak nganyi", "wok lor", "zama", "zame",
+    "ambo", "abe",  "gapo",
     "bakpo", "demo", "kawe", "kito", "gewe",
-    "ghoyak", "ghukah", "ghetek", "gostae", "hok",
-    "jah", "lok"
-]
+    "ghoyak", "ghukah", "ghetek", "gostae"
+
+    ]
 
 def detect_kelantan_dialect(text):
 
     text = str(text).lower()
-
     text = re.sub(r"[^a-zA-ZÀ-ÿ0-9\s]", " ", text)
-
     text = re.sub(r"\s+", " ", text).strip()
 
     matched_words = []
@@ -470,12 +465,9 @@ def detect_kelantan_dialect(text):
         word_clean = word.lower().strip()
 
         if " " in word_clean:
-
             if word_clean in text:
                 matched_words.append(word_clean)
-
         else:
-
             pattern = r"\b" + re.escape(word_clean) + r"\b"
 
             if re.search(pattern, text):
@@ -483,7 +475,32 @@ def detect_kelantan_dialect(text):
 
     print("MATCHED KELANTAN WORDS:", matched_words)
 
-    if len(matched_words) >= 1:
+    phrase_matches = [w for w in matched_words if " " in w]
+    single_matches = [w for w in matched_words if " " not in w]
+
+    if len(phrase_matches) >= 1:
+        return "kelantan"
+
+    strong_words = [
+        "ambo",
+        "gapo",
+        "bakpo",
+        "kawe",
+        "guano",
+        "ghoyak",
+        "ghukah",
+        "pitih",
+        "bekwoh",
+        "sokmo",
+        "toksoh"
+    ]
+
+    strong_matches = [
+        w for w in single_matches
+        if w in strong_words
+    ]
+
+    if len(set(strong_matches)) >= 2:
         return "kelantan"
 
     return "malay"
@@ -1017,16 +1034,17 @@ def admin():
         search=search
     )
 
-@app.route("/delete-record/<int:record_id>")
-def delete_record(record_id):
+@app.route("/delete-record/<int:id>")
+def delete_record(id):
 
     if not session.get("admin"):
         return redirect(url_for("login"))
 
-    record = SentimentData.query.get_or_404(record_id)
+    record = SentimentData.query.get(id)
 
-    db.session.delete(record)
-    db.session.commit()
+    if record:
+        db.session.delete(record)
+        db.session.commit()
 
     return redirect(url_for("admin"))
 
@@ -1081,7 +1099,6 @@ def upload():
     if file and file.filename.endswith(".csv"):
 
         file.save("data/kelantan_extended.csv")
-
         df = pd.read_csv("data/kelantan_extended.csv")
 
         print("CSV ROWS:", len(df))
@@ -1089,37 +1106,191 @@ def upload():
         db.session.query(SentimentData).delete()
         db.session.commit()
 
+       # ONLY location/topic keywords here
+        kelantan_keywords = [
+            "kelantan",
+            "kota bharu",
+            "pasir mas",
+            "tumpat",
+            "machang",
+            "tanah merah",
+            "gua musang",
+            "bachok",
+            "pasir puteh",
+            "pengkalan chepa",
+            "ketereh",
+            "kubang kerian",
+            "wakaf bharu",
+            "kok lanas",
+            "rantau panjang"
+        ]
+
+
+        political_keywords = [
+            "politik", "parti", "undi", "pilihan raya", "pru", "prn",
+            "dun", "parlimen", "menteri", "kerajaan negeri",
+            "manifesto", "kempen", "calon", "adun", "mp",
+            "pas", "umno", "bersatu", "pkr", "dap", "pn", "ph", "bn"
+        ]
+
+        saved_rows = 0
+        skipped_politic = 0
+        skipped_non_kelantan = 0
+
         for _, row in df.iterrows():
 
+            comment = ""
+            for col in ["comment/tweet", "comment", "tweet", "text", "content", "news", "caption", "post", "article", "description"]:
+                if col in df.columns:
+                    comment = str(row.get(col, ""))
+                    break
+
+            topic = "general"
+            for col in ["post/keyword", "topic", "keyword", "issue", "title", "category"]:
+                if col in df.columns:
+                    topic = str(row.get(col, "general"))
+                    break
+
+            username = "dataset"
+            for col in ["username", "user", "author", "name", "source"]:
+                if col in df.columns:
+                    username = str(row.get(col, "dataset"))
+                    break
+
+            full_text = f"{topic} {comment}".lower()
+
+            if any(word in full_text for word in political_keywords):
+                skipped_politic += 1
+                continue
+
+            dialect = detect_kelantan_dialect(full_text)
+
+            matched_keywords = []
+
+            for keyword in kelantan_keywords:
+
+                keyword_clean = keyword.lower().strip()
+
+                # PHRASE MATCH
+                if " " in keyword_clean:
+
+                    if keyword_clean in full_text:
+                        matched_keywords.append(keyword_clean)
+
+                # SINGLE WORD MATCH
+                else:
+
+                    pattern = r"\b" + re.escape(keyword_clean) + r"\b"
+
+                    if re.search(pattern, full_text):
+                        matched_keywords.append(keyword_clean)
+
+            print("MATCHED KELANTAN WORDS:", matched_keywords)
+
+            is_kelantan_topic = False
+
+            # STRONG PHRASE
+            if any(" " in word for word in matched_keywords):
+                is_kelantan_topic = True
+
+            # REQUIRE 2 SINGLE WORDS
+            elif len(matched_keywords) >= 2:
+                is_kelantan_topic = True
+
+            if dialect != "kelantan" and not is_kelantan_topic:
+                skipped_non_kelantan += 1
+                continue
+
+            sentiment, confidence = predict_sentiment(comment)
+            comment_lower = comment.lower()
+
+            negative_phrases = [
+
+                "banjir",
+                "sampah",
+                "sesak",
+                "jem",
+                "kemalangan",
+                "langgar",
+                "rempit",
+                "mat rempit",
+                "jenayah",
+                "seludup",
+                "sedih",
+                "takut",
+                "marah",
+                "bahaya",
+                "risau",
+                "kecewa",
+
+                # CRIME / NEWS
+                "didakwa",
+                "seksual",
+                "meraba",
+                "remaja",
+                "mangsa",
+                "kes",
+                "polis",
+                "mahkamah",
+                "cedera",
+                "maut",
+                "rogol",
+                "bunuh",
+                "curi",
+                "serang",
+                "siasatan",
+                "penjara",
+                "hukuman"
+            ]
+
+            positive_phrases = [
+
+                "gotong royong",
+                "bantu",
+                "tolong",
+                "sukarelawan",
+                "molek",
+                "bagus",
+                "terbaik",
+                "bersih",
+                "selamat",
+                "semoga",
+                "baik",
+                "kerjasama",
+                "perpaduan"
+            ]
+
+            # FORCE NEGATIVE
+            if any(word in comment_lower for word in negative_phrases):
+                sentiment = "negative"
+
+            # FORCE POSITIVE
+            elif any(word in comment_lower for word in positive_phrases):
+                sentiment = "positive"
+
+            # LOW CONFIDENCE = NEUTRAL
+            elif confidence < 70:
+                sentiment = "neutral"
             data = SentimentData(
-
-                post_keyword=str(row.get("post/keyword", "")),
-
-                comment_text=str(row.get("comment/tweet", "")),
-
-                username=str(row.get("username", "")),
-
-                like_count=safe_int(row.get("like count", 0)),
-
-                reply_count=safe_int(row.get("reply count", 0)),
-
-                time_created=str(row.get("time created", "")),
-
-                sentiment_label=str(row.get("majority_sent", "")),
-
-                sarcasm_label=str(row.get("majority_sarc", "")),
-
-                language_id=detect_kelantan_dialect(
-                str(row.get("comment/tweet", ""))
-
-                )
+                post_keyword=topic,
+                comment_text=comment,
+                username=username,
+                like_count=0,
+                reply_count=0,
+                time_created=str(datetime.now()),
+                sentiment_label=sentiment,
+                sarcasm_label="unknown",
+                language_id=dialect
             )
 
-
-
             db.session.add(data)
+            saved_rows += 1
 
         db.session.commit()
+
+        print("KELANTAN ROWS SAVED:", saved_rows)
+        print("SKIPPED POLITICAL ROWS:", skipped_politic)
+        print("SKIPPED NON-KELANTAN ROWS:", skipped_non_kelantan)
 
     return redirect(url_for("admin"))
 
