@@ -79,15 +79,21 @@ new Chart(document.getElementById('trendChart'), {
         datasets: [
             {
                 label: 'Positive',
-                data: positiveTrend
+                data: positiveTrend,
+                borderColor: '#2ecc71',
+                backgroundColor: 'rgba(46,204,113,0.2)'
             },
             {
                 label: 'Neutral',
-                data: neutralTrend
+                data: neutralTrend,
+                borderColor: '#3498db',
+                backgroundColor: 'rgba(52,152,219,0.2)'
             },
             {
                 label: 'Negative',
-                data: negativeTrend
+                data: negativeTrend,
+                borderColor: '#e74c3c',
+                backgroundColor: 'rgba(231,76,60,0.2)'
             }
         ]
     }
@@ -102,7 +108,12 @@ new Chart(document.getElementById('sentimentChart'), {
     data: {
         labels: ['Positive', 'Neutral', 'Negative'],
         datasets: [{
-            data: [positive, neutral, negative]
+            data: [positive, neutral, negative],
+            backgroundColor: [
+                '#2ecc71',
+                '#3498db',
+                '#e74c3c'
+            ]
         }]
     }
 });

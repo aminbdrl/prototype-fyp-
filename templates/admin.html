@@ -143,15 +143,19 @@ function showUploadLoading() {
     <h3>Latest Dataset Records</h3>
 
     <table>
-        <tr>
-            <th>ID</th>
-            <th>Topic</th>
-            <th>Comment/Tweet</th>
-            <th>Username</th>
-            <th>Sentiment</th>
-            <th>Language</th>
-            <th>Action</th>
-        </tr>
+    <tr>
+        <th>ID</th>
+        <th>Topic</th>
+        <th>Comment/Tweet</th>
+        <th>Username</th>
+        <th>Sentiment</th>
+        <th>Language</th>
+
+        <th>Time Created</th>
+        <th>Source</th>
+
+        <th>Action</th>
+    </tr>
 
         {% for row in latest_data %}
         <tr>
@@ -161,6 +165,9 @@ function showUploadLoading() {
             <td>{{ row.username }}</td>
             <td>{{ row.majority_sent }}</td>
             <td>{{ row.lang_id }}</td>
+            
+            <td>{{ row["time created"] }}</td>
+            <td>{{ row.username }}</td>
 
             <td>
                 <a href="{{ url_for('delete_record', id=row['id']) }}"

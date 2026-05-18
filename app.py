@@ -9,7 +9,7 @@ import pandas as pd
 import joblib
 import re
 import os
-import random
+import random 
 
 from config import Config
 
@@ -62,9 +62,10 @@ def clean_text(text):
     return text
 
 
+model = joblib.load("models/sentiment_model.pkl")
+vectorizer = joblib.load("models/vectorizer.pkl")
+
 def predict_sentiment(text):
-    model = joblib.load("models/sentiment_model.pkl")
-    vectorizer = joblib.load("models/vectorizer.pkl")
 
     cleaned = clean_text(text)
     vectorized = vectorizer.transform([cleaned])
@@ -88,319 +89,49 @@ def save_prediction_log(text, result, confidence):
     db.session.add(new_log)
     db.session.commit()
 
-def fetch_x_posts(keyword, max_results=10):
+def fetch_x_posts(keyword, max_results=20):
 
     bearer_token = os.getenv("X_BEARER_TOKEN")
 
-    url = "https://api.x.com/2/tweets/search/recent"
+    client = requests.Session()
+
+    url = "https://api.twitter.com/2/tweets/search/recent"
 
     headers = {
         "Authorization": f"Bearer {bearer_token}"
     }
 
+    query = keyword
+
     params = {
-        "query": f"{keyword} lang:ms -is:retweet",
+        "query": query,
         "max_results": max_results,
-        "tweet.fields": "created_at,lang,public_metrics"
+        "tweet.fields":
+        "created_at,lang,public_metrics"
     }
 
-    response = requests.get(url, headers=headers, params=params)
+    response = client.get(
+        url,
+        headers=headers,
+        params=params
+    )
 
     if response.status_code == 200:
+
         data = response.json()
-        return data.get("data", [])
 
-    print("X API unavailable. Using demo fallback data.")
+        return data.get(
+            "data",
+            []
+        )
 
-    demo_posts = []
+    print(
+        "X API ERROR:",
+        response.status_code,
+        response.text
+    )
 
-    districts = [
-        "Kota Bharu",
-        "Pasir Mas",
-        "Tumpat",
-        "Machang",
-        "Tanah Merah",
-        "Bachok"
-    ]
-
-    for i in range(20):
-
-        district = districts[i % len(districts)]
-
-        issue_comments = {
-
-            "banjir": [
-
-                f"Air sungai dekat {district} naik cepat sungguh sejak malam tadi.",
-                f"Ramai penduduk {district} dah mula pindah barang ke tempat tinggi.",
-                f"Hujan tak berhenti-henti dari semalam, kawe risau banjir makin teruk.",
-                f"Jalan utama dekat {district} banyak dah mula dinaiki air.",
-                f"Oghe kampung di {district} ramai duk update keadaan banjir dalam Facebook.",
-                f"Kawe tengok air dekat rumah naik sikit demi sikit malam ni.",
-                f"Semoga semua mangsa banjir di {district} dipermudahkan urusan.",
-                f"Demo semua hati-hati kalau lalu kawasan rendah dekat {district}.",
-                f"Banjir kali ni nampok macam lebih teruk dari tahun lepas.",
-                f"Ramai sukarelawan turun bantu mangsa banjir dekat {district}.",
-                f"Bekalan makanan dekat pusat pemindahan sementara mula diagihkan.",
-                f"Kawe harap cuaca cepat baik sebab ramai dah terjejas.",
-                f"Air deras dekat kawasan sungai memang bahaya untuk budok kecik.",
-                f"Oghe ramai mula risau kalau hujan berterusan sampai esok.",
-                f"Kawe tengok banyak kereta terkandas sebab jalan dinaiki air.",
-                f"Penduduk {district} ramai update video banjir dalam TikTok sekarang.",
-                f"Banyak rumah dekat kawasan rendah dah mula dimasuki air.",
-                f"Kawe doa semoga semua keluarga di {district} selamat.",
-                f"Banjir ni memang ujian berat untuk masyarakat kampung.",
-                f"Ramai netizen duk share nombor bantuan untuk mangsa banjir."
-            ],
-
-
-            "sampah": [
-
-                f"Sampah dekat tepi jalan {district} makin banyak sekarang.",
-                f"Demo buang sampah merata-rata memang susahkan masyarakat.",
-                f"Kawe tengok longkang dekat {district} penuh dengan sampah.",
-                f"Bau sampah dekat kawasan pasar memang kuat sungguh.",
-                f"Oghe ramai mengadu pasal masalah kebersihan di {district}.",
-                f"Kalau semua jaga kebersihan, kawasan kampung jadi lebih molek.",
-                f"Kawe rasa kesedaran pasal kebersihan masih rendah lagi.",
-                f"Sampah bertimbun ni boleh tarik tikus dan serangga.",
-                f"Demo semua kena cakno kebersihan kawasan masing-masing.",
-                f"Ramai netizen marah tengok sampah dibuang dalam sungai.",
-                f"Tok soh harap pekerja majlis je, masyarakat pun kena bantu.",
-                f"Kawe tengok banyak plastik dan botol dibuang tepi jalan.",
-                f"Isu sampah dekat {district} ni dah lama berlaku.",
-                f"Oghe kampung harap tindakan lebih tegas untuk orang buang sampah.",
-                f"Kalau hujan lebat, sampah ni boleh sebabkan banjir pulok.",
-                f"Kawe rasa gotong royong kena dibuat lebih kerap.",
-                f"Ramai pengguna media sosial kongsi gambar kawasan kotor sekarang.",
-                f"Sampah dekat pasar malam memang banyak lepas habis berniaga.",
-                f"Demo semua jangan malas buang sampah dalam tong.",
-                f"Kawe tengok ramai budok muda mula cakno pasal kebersihan."
-            ],
-
-
-            "kesesakan jalan": [
-
-                f"Jalan dekat {district} sesak teruk petang ni.",
-                f"Kawe ambik masa hampir sejam untuk lalu kawasan bandar tadi.",
-                f"Oghe ramai mengadu trafik makin teruk sejak akhir-akhir ni.",
-                f"Demo keluar awal sikit kalau nak elak jem dekat {district}.",
-                f"Kesesakan dekat lampu isyarat memang panjang waktu balik kerja.",
-                f"Kawe tengok banyak kereta tersangkut dekat jalan utama.",
-                f"Jalan sempit dan jumlah kereta makin banyak sekarang.",
-                f"Ramai pengguna jalan raya dah mula fedup dengan jem harian.",
-                f"Kalau cuti sekolah memang lagi sesak kawasan bandar.",
-                f"Kawe rasa jalan dekat {district} perlu dinaik taraf segera.",
-                f"Oghe ramai share keadaan trafik dalam media sosial hari ni.",
-                f"Kesesakan ni buat ramai lambat sampai tempat kerja.",
-                f"Demo semua kena lebih sabar waktu memandu.",
-                f"Kawe tengok banyak motosikal cilok waktu jem.",
-                f"Jalan dekat pasar malam memang sesak habih malam ni.",
-                f"Ramai netizen kata trafik sekarang makin mencabar.",
-                f"Kawe harap pihak berkaitan cari penyelesaian cepat.",
-                f"Oghe kampung pun mula rasa jalan makin sibuk sekarang.",
-                f"Jem dekat kawasan sekolah memang teruk waktu pagi.",
-                f"Kalau hujan sikit terus trafik jadi perlahan."
-            ],
-
-
-            "jenayah ketereh": [
-
-                f"Kes dekat Ketereh ni memang buat ramai oghe terkejut pagi tadi.",
-                f"Kawe baca berita pun rasa seram dengan apa yang berlaku.",
-                f"Ramai netizen minta polis percepatkan siasatan kes ni.",
-                f"Kes macam ni memang ganggu rasa selamat masyarakat sekarang.",
-                f"Oghe Kelantan ramai duk bincang kes ni dalam Facebook malam ni.",
-                f"Demo semua jangan cepat percaya cerita tak sahih pasal kes ni.",
-                f"Kawe tengok ramai orang share rasa simpati dekat keluarga mangsa.",
-                f"Berita kes ni memang penuh dalam timeline sejak semalam lagi.",
-                f"Ramai marah kalau tengok jenayah berat makin menjadi sekarang.",
-                f"Kes ni memang jadi topik panas dalam media sosial Kelantan.",
-                f"Kawe harap pihak polis dapat cari bukti dengan cepat.",
-                f"Oghe kampung dekat Ketereh pun ramai terkejut dengan kejadian ni.",
-                f"Ramai pengguna TikTok duk buat awareness pasal keselamatan sekarang.",
-                f"Kes macam ni buat ibu bapa makin risau nak bagi anak keluar malam.",
-                f"Kawe tengok ramai netizen minta hukuman lebih tegas untuk penjenayah.",
-                f"Memang sedih tengok berita jenayah macam ni berlaku dekat negeri sendiri.",
-                f"Oghe ramai duk bincang pasal keselamatan kawasan kampung sekarang.",
-                f"Kalau buka komen Facebook, memang penuh orang bercakap pasal kes ni.",
-                f"Ramai harap kes ni dapat diselesaikan secepat mungkin.",
-                f"Kes jenayah ni memang tinggalkan kesan besar pada masyarakat."
-            ],
-
-
-            "petrol tumpat": [
-
-                f"Kes seludup petrol dekat Tumpat ni memang viral sungguh sekarang.",
-                f"Kawe tak sangka kereta kecil pun boleh ubah suai untuk sorok minyak.",
-                f"Ramai netizen puji tindakan pihak berkuasa tahan suspek dekat sempadan.",
-                f"Kes macam ni memang rugikan rakyat sebab subsidi disalah guna.",
-                f"Oghe ramai duk bincang pasal harga minyak sejak berita ni keluar.",
-                f"Demo semua jangan ambik kesempatan atas subsidi kerajaan.",
-                f"Kawe tengok ramai marah bila baca berita pasal kes ni.",
-                f"Kalau tengok media sosial, ramai setuju tindakan tegas patut dibuat.",
-                f"Kes seludup minyak dekat Tumpat memang jadi perhatian sekarang.",
-                f"Ramai pengguna Facebook share video dan berita pasal kes ni.",
-                f"Kawe rasa kawalan sempadan kena dipertingkatkan lagi lepas ni.",
-                f"Oghe ramai pelik macam mano boleh sorok minyak banyak dalam kereta.",
-                f"Kes macam ni memang buat rakyat rasa kecewa sungguh.",
-                f"Ramai netizen kata subsidi patut sampai pada rakyat yang betul-betul perlu.",
-                f"Kawe tengok ramai minta hukuman lebih berat untuk penyeludup.",
-                f"Demo semua jangan pentingkan duit sampai buat kerja salah macam ni.",
-                f"Berita ni memang cepat viral dalam grup Kelantan malam tadi.",
-                f"Oghe kampung pun ramai sembang pasal kes ni sekarang.",
-                f"Kawe rasa penguatkuasaan dekat kawasan sempadan kena lebih ketat.",
-                f"Kes petrol dekat Tumpat ni memang jadi topik hangat minggu ni."
-            ],
-
-
-            "tiang konkrit": [
-
-                f"Sedih sungguh dengar budok kena hempap tiang konkrit dekat Kota Bharu.",
-                f"Ramai netizen ucap takziah pada keluarga mangsa malam ni.",
-                f"Kawe rasa kawasan permainan budok kena dipantau lebih ketat.",
-                f"Kes macam ni memang buat ramai ibu bapa takut dan risau.",
-                f"Oghe ramai marah sebab struktur berat dibiarkan dekat tempat budok bermain.",
-                f"Kawe tengok ramai share berita sedih ni dalam TikTok sekarang.",
-                f"Kejadian macam ni memang sangat menyayat hati untuk masyarakat.",
-                f"Demo semua kena lebih cakno pasal keselamatan kawasan awam.",
-                f"Ramai pengguna media sosial minta siasatan dibuat segera.",
-                f"Kawe harap pihak berkaitan periksa semua kawasan permainan lepas ni.",
-                f"Kes ni memang buat ramai orang tersentuh hati sungguh.",
-                f"Oghe ramai kata keselamatan budok kecil jangan dibuat main.",
-                f"Kawe tengok ramai ibu bapa mula risau dengan kawasan permainan terbuka.",
-                f"Ramai netizen minta tindakan segera supaya benda macam ni tak ulang lagi.",
-                f"Berita ni memang cepat viral sebab ramai rasa simpati dekat keluarga mangsa.",
-                f"Kawe rasa semua tempat awam kena diperiksa balik demi keselamatan.",
-                f"Oghe ramai share doa dan ucapan takziah dalam media sosial malam ni.",
-                f"Kejadian macam ni memang beri kesan besar pada masyarakat setempat.",
-                f"Ramai pengguna Facebook kata keselamatan kawasan awam perlu dipertingkatkan.",
-                f"Kawe harap keluarga mangsa diberi kekuatan menghadapi ujian ni."
-            ],
-
-
-            "kemalangan sekolah": [
-
-                f"Kes pelajar kena langgar dekat sekolah ni memang mengejutkan ramai.",
-                f"Kawe tengok ramai netizen marah dengan pemandu yang bawak laju.",
-                f"Kawasan sekolah memang kena had laju lebih ketat lepas ni.",
-                f"Ramai ibu bapa risau keselamatan anak-anak waktu pergi sekolah.",
-                f"Demo semua bawak kereta biar perlahan dekat kawasan sekolah.",
-                f"Video kemalangan tu memang viral dalam TikTok sekarang.",
-                f"Kawe harap pelajar yang cedera cepat sembuh.",
-                f"Oghe ramai minta bonggol jalan ditambah dekat kawasan sekolah.",
-                f"Kes macam ni memang buat masyarakat sedih dan marah.",
-                f"Keselamatan pelajar kena jadi keutamaan semua pihak.",
-                f"Kawe tengok ramai pengguna media sosial kongsi rasa simpati dekat keluarga mangsa.",
-                f"Ramai netizen kata kawasan sekolah sekarang makin bahaya waktu pagi.",
-                f"Kalau tengok komen Facebook, ramai minta tindakan lebih tegas dekat pemandu cuai.",
-                f"Oghe ramai harap pihak sekolah dan JPJ ambik perhatian serius pasal isu ni.",
-                f"Kawe rasa zebra crossing dekat sekolah kena diperjelaskan lagi.",
-                f"Ramai pengguna jalan raya masih bawak laju walaupun dekat kawasan sekolah.",
-                f"Kes ni memang buat ramai ibu bapa takut nak lepaskan anak jalan sendiri.",
-                f"Kawe tengok ramai budak sekolah melintas jalan tanpa pengawasan sekarang.",
-                f"Ramai pengguna TikTok share video pasal keselamatan pelajar sejak kes ni viral.",
-                f"Oghe ramai harap kemalangan macam ni tak berlaku lagi lepas ni."
-            ],
-
-            "gotong royong": [
-
-                f"Program gotong royong di {district} ni memang terbaik, ramai oghe turun bantu.",
-                f"Kawe suka tengok masyarakat {district} bekerjasama bersihkan kawasan kampung.",
-                f"Gotong royong macam ni boleh rapatkan hubungan sesama jiran.",
-                f"Demo semua bagus, kerja bersih kampung jadi cepat siap.",
-                f"Ramai anak muda turut serta dalam gotong royong pagi tadi.",
-                f"Kawasan taman dekat {district} nampok lebih bersih lepas program tadi.",
-                f"Kawe rasa aktiviti macam ni patut dibuat lebih kerap.",
-                f"Oghe kampung sama-sama bantu angkat sampah dan bersihkan longkang.",
-                f"Suasana gotong royong tadi memang meriah dengan ramai penduduk hadir.",
-                f"Kawe tengok ramai sukarelawan datang walaupun cuaca panas.",
-                f"Program macam ni memang bagus untuk pupuk semangat kejiranan.",
-                f"Ramai netizen puji usaha penduduk {district} jaga kebersihan kawasan.",
-                f"Demo semua pakat bersih kawasan memang molek sungguh tengok.",
-                f"Kawe harap lebih banyak komuniti buat aktiviti gotong royong macam ni.",
-                f"Budok muda pun nampok semangat bantu masyarakat pagi ni.",
-                f"Gotong royong dekat {district} ni memang tunjuk semangat perpaduan masyarakat.",
-                f"Oghe ramai datang awal pagi semata-mata nak bantu bersihkan kawasan.",
-                f"Kawe tengok hubungan jiran jadi lebih rapat lepas aktiviti ni.",
-                f"Ramai penduduk share gambar gotong royong dalam Facebook hari ni.",
-                f"Kalau semua kawasan buat gotong royong macam ni memang bersih sokmo."
-            ],
-
-            "rempit": [
-
-                f"Mat rempit dekat airport Kelantan tu memalukan imej negeri.",
-                f"Demo buat gapo merempit depan airport, ramai penumpang terganggu.",
-                f"Bunyi ekzos malam-malam di Pengkalan Chepa tu gege sungguh.",
-                f"Kawe sokong tindakan sita motor kalau masih buat aksi bahaya.",
-                f"Setiap malam ado je mat rempit berkumpul dekat airport.",
-                f"Oghe nak hantar keluarga ke airport pun jadi takut doh.",
-                f"Ramai pelancong luar tengok perangai mat rempit ni, malu weh.",
-                f"Demo ingat jalan airport tu litar lumba ka?",
-                f"Kawe tengok makin ramai budok muda join geng rempit sekarang.",
-                f"JPJ dan polis kena ronda lebih kerap kawasan airport waktu malam.",
-                f"Video mat rempit dekat airport Kelantan tu viral habih dalam TikTok.",
-                f"Bunyi ekzos kuat tengah malam memang ganggu penduduk sekitar.",
-                f"Oghe nak tidur pun susoh bila geng motor dok gelek malam-malam.",
-                f"Kawe rasa tindakan sita motor memang patut dibuat.",
-                f"Ramai netizen puji tindakan polis ambik tindakan dekat kawasan airport.",
-                f"Demo semua jangan jadi hero atas jalan raya sampai bahayakan oghe lain.",
-                f"Rempit depan airport ni bukan budaya yang baik untuk anak muda.",
-                f"Kawe tengok ramai pengguna jalan raya dah mula marah dengan geng rempit ni.",
-                f"Ado yang buat wheelie depan kereta orang, memang bahaya sungguh.",
-                f"Oghe luar datang Kelantan, benda ni pulok yang nampok dulu."
-            ],
-
-
-            "umum": [
-
-                f"Kawe tengok isu pasal {keyword} ni makin ramai dok bincang di {district}.",
-                f"Oghe {district} pun ramai share pendapat pasal isu {keyword} sekarang.",
-                f"Demo rasa macam mano isu {keyword} ni berlaku di {district}?",
-                f"Harap pihak berkaitan dapat tengok balik isu {keyword} di {district}.",
-                f"Isu {keyword} ni jadi topik panas di kawasan {district} sejak akhir-akhir ni.",
-                f"Ramai netizen Kelantan duk bincang pasal {keyword} terutama di {district}.",
-                f"Kawe tengok ramai tak puas hati pasal isu {keyword} di {district}.",
-                f"Kalau isu {keyword} ni tak selesai cepat, oghe {district} makin risau.",
-                f"Ada yang sokong, ada jugok yang kritik isu {keyword} di {district}.",
-                f"Tok soh ambik mudah isu {keyword} ni, ramai penduduk {district} terkesan.",
-                f"Perbincangan pasal {keyword} di {district} makin aktif dalam media sosial.",
-                f"Kawe harap keadaan pasal {keyword} di {district} boleh jadi lebih baik lepas ni.",
-                f"Ramai anak muda di {district} duk share pandangan pasal isu {keyword}.",
-                f"Isu {keyword} ni nampok kecik, tapi ramai oghe di {district} ambik serius.",
-                f"Demo tengok sendiri lah, isu {keyword} ni memang jadi perhatian di {district}.",
-                f"Timeline Facebook penuh doh dengan cerita pasal {keyword} di {district}.",
-                f"Kawe perati ramai oghe mula bincang pasal {keyword} sejak semalam lagi.",
-                f"Kalau tengok komen netizen, ramai oghe {district} ada pandangan berbeza pasal {keyword}.",
-                f"Oghe kampung pun duk sembang pasal isu {keyword} ni sekarang.",
-                f"Rata-rata masyarakat di {district} harap isu {keyword} ni cepat selesai."
-            ],
-
-
-}
-
-        keyword_lower = keyword.lower()
-
-        selected_comments = issue_comments.get("umum")
-
-        for issue_key, comments in issue_comments.items():
-            if issue_key in keyword_lower:
-                selected_comments = comments
-                break
-
-        text = random.choice(selected_comments)
-
-        demo_posts.append({
-            "text": text,
-            "created_at": str(datetime.now()),
-            "lang": "ms",
-            "public_metrics": {
-                "like_count": random.randint(1, 500),
-                "reply_count": random.randint(0, 50)
-            }
-        })
-
-    return demo_posts
+    return []
 
 kelantan_words = [
     "agah", "hagah", "api stok", "asore bodi", "awe",
@@ -505,20 +236,44 @@ def detect_kelantan_dialect(text):
 
     return "malay"
 
-@app.route("/fetch-x", methods=["POST"])
+@app.route("/fetch-x", methods=["GET", "POST"])
 
 def fetch_x():
 
     if not session.get("admin"):
         return redirect(url_for("login"))
 
-    keyword = request.form.get("keyword")
+    keyword = request.form.get("keyword", "").strip()
+
+    if not keyword:
+        return redirect(url_for("admin"))
 
     posts = fetch_x_posts(keyword, max_results=10)
+
+    bearer_token = os.getenv("X_BEARER_TOKEN")
+
+    print("TOKEN:", bearer_token)
+
+    client = requests.Session()
+
+    print("FETCH TIME:", datetime.now())
+   
 
     print("TOTAL POSTS FETCHED:", len(posts))
 
     for post in posts:
+
+        text = post.get("text", "")
+
+        print(
+        "TWEET TIME:",
+        post.get("created_at", "")
+        )
+
+        print(
+            "TEXT:",
+            text
+        )
 
         text = post.get("text", "")
 
@@ -528,6 +283,95 @@ def fetch_x():
         print("DIALECT:", dialect_label)
 
         text_lower = text.lower()
+
+        political_phrases = [
+            "pas",
+            "umno",
+            "pkr",
+            "dap",
+            "pn",
+            "ph",
+            "bn",
+            "walaun",
+            "uec",
+            "parti",
+            "undi",
+            "pilihan raya",
+            "pru",
+            "prn",
+            "politik",
+            "kerajaan",
+            "menteri"
+        ]
+
+        adult_spam_phrases = [
+            "open new slot",
+            "dick",
+            "pusyy",
+            "chudai",
+            "colmek",
+            "kote",
+            "pepek",
+            "ds girl",
+            "slot",
+            "threesome",
+            "tele",
+            "janda",
+            "dm or tele",
+            "tele id",
+            "telegram",
+            "mummy",
+            "jilboob",
+            "chindo",
+            "ds",
+            "sex",
+            "sexual",
+            "horny",
+            "hoockup",
+            "18+",
+            "18sx",
+            "slot ds",
+            "vid",
+            "pic",
+
+            # selling / promo
+            "limited slot",
+            "waitlist",
+            "commission",
+            "appointment",
+            "channel",
+            "open jasa",
+
+            # explicit
+            "nude",
+            "boobs",
+            "breast",
+            "panties",
+            "onlyfans",
+            "nsfw",
+            "fuck",
+            "bj",
+            "anal",
+            "oral",
+            "cum",
+            "sugarbaby",
+            "sugar baby",
+            "sugar daddy",
+            "massage"
+        ]
+
+        if any(word in text_lower for word in political_phrases):
+            print("SKIPPED POLITICAL POST:", text)
+            continue
+
+        is_spam = any(
+            word in text_lower
+            for word in adult_spam_phrases
+        )
+
+        if is_spam:
+            sentiment = "spam"
+            confidence = 100
 
         positive_phrases = [
 
@@ -584,6 +428,45 @@ def fetch_x():
 
 
         negative_phrases = [
+
+            "bodoh",
+            "walaun",
+            "kepam",
+            "benci",
+            "hina",
+            "marah",
+            "teruk",
+            "takde masa",
+            "layan kerenah",
+            "rasuah",
+            "burit",
+            "bodoh",
+            "bangang",
+            "babi",
+            "sial",
+            "pukimak",
+            "celaka",
+            "hina",
+            "keji",
+            "teruk",
+            "rasuah",
+            "penipu",
+            "scam",
+            "curi",
+            "rogol",
+            "bunuh",
+            "tikam",
+            "mangsa",
+            "jenayah",
+            "pukul",
+            "ugut",
+            "gangster",
+            "maki",
+            "marah",
+            "benci",
+            "kecewa",
+            "menipu",
+            "haram",
 
             # rempit
             "mat rempit",
@@ -685,15 +568,23 @@ def fetch_x():
 
         ]
 
-        if any(word in text_lower for word in negative_phrases):
+        if is_spam:
+
+            sentiment = "spam"
+            confidence = 100
+
+        elif any(word in text_lower for word in negative_phrases):
+
             sentiment = "negative"
             confidence = 90
 
         elif any(word in text_lower for word in positive_phrases):
+
             sentiment = "positive"
             confidence = 90
 
         else:
+
             sentiment = "neutral"
             confidence = 80
 
@@ -1071,6 +962,7 @@ def export_report():
     summary.to_csv(report_file, index=False)
 
     return send_file(report_file, as_attachment=True)
+
 def safe_int(value):
 
     try:
@@ -1088,6 +980,83 @@ def safe_int(value):
     except:
         return 0
     
+def detect_language_4(text):
+
+    text = str(text)
+    text_lower = text.lower()
+
+    # Chinese detection
+    if re.search(r"[\u4e00-\u9fff]", text):
+        return "chinese"
+
+    # Kelantan dialect detection
+    kelantan_topic_words = [
+    "kelate", "klate", "koto bharu", "kota bharu",
+    "nasi kerabu", "nasi tupe", "laksam", "akok",
+    "colek", "budu", "somtam", "dikir barat",
+    "wayang kulit", "bekwoh", "gomo kelate",
+    "pante", "wakaf che yeh", "tok bali",
+    "kawe", "ambo", "gapo", "bakpo", "sokmo",
+    "tokleh", "ore", "make", "molek", "do’oh",
+    "dda’a", "bba-ba", "kurela", "ghoyak"
+]
+
+    if (
+        detect_kelantan_dialect(text_lower) == "kelantan"
+        or any(word in text_lower for word in kelantan_topic_words)
+    ):
+        return "kelantan"
+
+    # English detection
+    english_words = [
+        "the", "and", "is", "are", "this", "that",
+        "good", "bad", "nice", "love", "hate", "happy", "sad",
+        "like", "dislike", "support", "oppose", "agree", "disagree",
+        "infrastructure", "community", "engagement", "social", "harmony",
+        "traffic", "road", "flood", "crime", "safety",
+        "education", "health", "environment", "economy", "job"
+    ]
+
+    if any(re.search(r"\b" + word + r"\b", text_lower) for word in english_words):
+        return "english"
+
+    return "malay"
+   
+names = [
+    "azwin", "jaselia", "mekyah", "pokdin", "abemat",
+    "mekani", "abemi", "mekna", "poksu", "wannisa",
+    "aina", "abeloh", "mekros", "tokayah", "wani",
+    "mie", "kakyati", "abedin", "nisa", "meksiti",
+    "abezul", "pija", "abenik", "mektie", "kaknoh",
+    "abemail", "amira", "faiz", "shafiq", "syazwan",
+    "atika", "farah"
+]
+
+loc_keywords = ["kb", "klate", "kelate", "gomo", "tokbali", "pc", "pasirmas"]
+fillers = ["_", "ys", "eyy", "aa", "qt", "zy", "hoo", "real", "yo"]
+
+def generate_twitter_username():
+    name = random.choice(names)
+    style = random.randint(1, 5)
+
+    if style == 1:
+        return f"{name}_{random.choice(loc_keywords)}"
+    elif style == 2:
+        return f"{name}{random.choice(fillers)}"
+    elif style == 3:
+        year = random.choice(["98", "99", "00", "01", "02", "03", "04", "05"])
+        separator = random.choice(["_", "", "."])
+        return f"{name}{separator}{year}"
+    elif style == 4:
+        prefix = random.choice(["its", "itsme", "not", "hi"])
+        return f"{prefix}{name}"
+    else:
+        return f"{name}{name[-1]*2}"
+
+def get_realistic_username():
+    return generate_twitter_username()
+
+
 @app.route("/upload", methods=["POST"])
 def upload():
 
@@ -1106,8 +1075,11 @@ def upload():
         db.session.query(SentimentData).delete()
         db.session.commit()
 
-       # ONLY location/topic keywords here
         kelantan_keywords = [
+
+            # =========================
+            # DISTRICT / LOCATION
+            # =========================
             "kelantan",
             "kota bharu",
             "pasir mas",
@@ -1117,12 +1089,94 @@ def upload():
             "gua musang",
             "bachok",
             "pasir puteh",
-            "pengkalan chepa",
             "ketereh",
-            "kubang kerian",
-            "wakaf bharu",
-            "kok lanas",
-            "rantau panjang"
+            "wakaf che yeh",
+            "pengkalan kubor",
+            "tok bali",
+            "pantai cahaya bulan",
+            "pcb",
+            "rantau panjang",
+
+            # =========================
+            # CULTURE
+            # =========================
+            "dikir barat",
+            "wayang kulit",
+            "rebana ubi",
+            "wau bulan",
+            "batik klate",
+            "songket",
+            "bekwoh",
+            "adat kelate",
+            "silat tari",
+            "gasing pangkah",
+            "main puteri",
+            "loghat kelate",
+
+            # =========================
+            # FOOD
+            # =========================
+            "nasi kerabu",
+            "nasi dagang",
+            "laksam",
+            "akok",
+            "budu",
+            "colek",
+            "nasi tumpang",
+            "nasi tupe",
+            "ketupat sotong",
+            "somtam",
+            "lompat tikam",
+            "etok salai",
+            "tepung pelita",
+            "jala emas",
+            "ayam percik",
+
+            # =========================
+            # TOURIST PLACE
+            # =========================
+            "pasar siti khadijah",
+            "pantai sri tujoh",
+            "gunung stong",
+            "lata rek",
+            "muzium klate",
+            "jalan berek",
+            "wakaf che yeh",
+            "pantai irama",
+            "kuala koh",
+
+            # =========================
+            # SPORT
+            # =========================
+            "kelantan fc",
+            "gomo kelate",
+            "stadium sultan muhammad iv",
+            "bola sepak",
+            "futsal",
+            "sepaktakraw",
+            "maraton",
+            "skateboard",
+            "e-sport",
+            "main bolo",
+
+            # =========================
+            # STRONG DIALECT
+            # =========================
+            "ambo",
+            "kawe",
+            "gapo",
+            "bakpo",
+            "guano",
+            "ghoyak",
+            "ghukah",
+            "toksoh",
+            "sokmo",
+            "kurela",
+            "pecoh panggung",
+            "pecoh peyok",
+            "kemah keming",
+            "ghuyup",
+            "jaddah"
         ]
 
 
@@ -1151,7 +1205,7 @@ def upload():
                     topic = str(row.get(col, "general"))
                     break
 
-            username = "dataset"
+            username = get_realistic_username()
             for col in ["username", "user", "author", "name", "source"]:
                 if col in df.columns:
                     username = str(row.get(col, "dataset"))
@@ -1197,9 +1251,11 @@ def upload():
             elif len(matched_keywords) >= 2:
                 is_kelantan_topic = True
 
-            if dialect != "kelantan" and not is_kelantan_topic:
-                skipped_non_kelantan += 1
-                continue
+    
+            language_label = detect_language_4(full_text)
+
+            if is_kelantan_topic and language_label == "malay":
+                language_label = "kelantan"
 
             sentiment, confidence = predict_sentiment(comment)
             comment_lower = comment.lower()
@@ -1280,7 +1336,7 @@ def upload():
                 time_created=str(datetime.now()),
                 sentiment_label=sentiment,
                 sarcasm_label="unknown",
-                language_id=dialect
+                language_id=language_label
             )
 
             db.session.add(data)

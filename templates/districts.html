@@ -27,13 +27,21 @@
             <td>{{ item.district }}</td>
             <td>{{ item.score }}%</td>
             <td>
+
                 {% if item.score >= 75 %}
-                    Strong
-                {% elif item.score >= 70 %}
-                    Moderate
-                {% else %}
+                    Stable
+
+                {% elif item.score >= 50 %}
+                    Moderate Concern
+
+                {% elif item.score >= 25 %}
                     Needs Attention
+
+                {% else %}
+                    Critical
+
                 {% endif %}
+
             </td>
         </tr>
         {% endfor %}
